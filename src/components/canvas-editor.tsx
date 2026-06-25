@@ -877,9 +877,9 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   }
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-[#f7f9fc] text-slate-950 overscroll-none">
-      <div className="grid h-[100dvh] min-h-0 grid-cols-[280px_minmax(0,1fr)_320px] max-[980px]:grid-cols-[250px_minmax(0,1fr)] max-[720px]:grid-cols-1 max-[720px]:grid-rows-[auto_minmax(0,1fr)_auto]">
-        <aside className="flex min-h-0 flex-col overflow-hidden border-r border-slate-200 bg-white p-3 max-[720px]:max-h-[46dvh] max-[720px]:border-b max-[720px]:border-r-0">
+    <main className="fixed inset-0 overflow-hidden bg-[#f7f9fc] text-slate-950 overscroll-none max-[720px]:static max-[720px]:min-h-dvh max-[720px]:overflow-x-hidden max-[720px]:overflow-y-auto max-[720px]:bg-gradient-to-b max-[720px]:from-white max-[720px]:to-slate-100 max-[720px]:pb-[calc(88px+env(safe-area-inset-bottom))]">
+      <div className="grid h-[100dvh] min-h-0 grid-cols-[280px_minmax(0,1fr)_320px] max-[980px]:grid-cols-[250px_minmax(0,1fr)] max-[720px]:h-auto max-[720px]:min-h-dvh max-[720px]:grid-cols-1 max-[720px]:gap-3 max-[720px]:p-3">
+        <aside className="flex min-h-0 flex-col overflow-hidden border-r border-slate-200 bg-white p-3 max-[720px]:order-2 max-[720px]:max-h-none max-[720px]:overflow-visible max-[720px]:rounded-[28px] max-[720px]:border max-[720px]:border-slate-200/80 max-[720px]:shadow-sm">
           <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-black">Pokemon Camp</h1>
@@ -909,7 +909,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
           <div className="mb-3 grid shrink-0 gap-2">
             <p className="text-xs font-black uppercase text-slate-500">Pose</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 max-[430px]:grid-cols-1">
               {POSE_OPTIONS.map((pose) => (
                 <button
                   key={pose.id}
@@ -933,8 +933,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
-            <div className="grid gap-2 pb-3">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 max-[720px]:overflow-visible max-[720px]:pr-0">
+            <div className="grid gap-2 pb-3 max-[720px]:grid-cols-2 max-[430px]:grid-cols-1">
             {POKEMON_TYPE_GROUPS.map((group) => (
               <section key={group.id} className="rounded-lg border border-slate-200">
                 <button
@@ -980,8 +980,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
           </div>
         </aside>
 
-        <section className="flex h-[100dvh] min-h-0 flex-col overflow-hidden max-[720px]:h-full">
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2">
+        <section className="flex h-[100dvh] min-h-0 flex-col overflow-hidden max-[720px]:order-1 max-[720px]:h-auto max-[720px]:overflow-visible">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 max-[720px]:sticky max-[720px]:top-0 max-[720px]:z-30 max-[720px]:rounded-[28px] max-[720px]:border max-[720px]:border-slate-200/80 max-[720px]:bg-white/92 max-[720px]:p-3 max-[720px]:shadow-[0_12px_34px_rgba(15,23,42,0.10)] max-[720px]:backdrop-blur">
             <div className="min-w-32">
               <p className="text-xs font-black uppercase text-slate-500">
                 {selectedPokemon.type}
@@ -993,7 +993,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
+              <div className="relative max-[720px]:static">
                 <div className="flex h-11 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 shadow-sm">
                   {recentPaints.map((paint) => (
                     <button
@@ -1026,7 +1026,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                 </div>
 
                 {isColorPickerOpen ? (
-                  <div className="absolute right-0 top-12 z-20 w-[min(88vw,430px)] rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
+                  <div className="absolute right-0 top-12 z-20 w-[min(88vw,430px)] rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur max-[720px]:fixed max-[720px]:inset-x-3 max-[720px]:bottom-[calc(86px+env(safe-area-inset-bottom))] max-[720px]:top-auto max-[720px]:z-50 max-[720px]:w-auto max-[720px]:rounded-[28px]">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
@@ -1171,7 +1171,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
             </div>
           ) : null}
 
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3">
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3 max-[720px]:overflow-visible max-[720px]:px-0 max-[720px]:py-2">
             <div
               className="w-full"
               style={{
@@ -1180,7 +1180,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                   : "min(100%, calc(100dvh - 150px), 860px)",
               }}
             >
-              <div className="relative aspect-square overflow-hidden rounded-lg border-2 border-slate-950 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
+              <div className="relative aspect-square overflow-hidden rounded-lg border-2 border-slate-950 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.12)] max-[720px]:rounded-[30px] max-[720px]:shadow-[0_24px_70px_rgba(15,23,42,0.16)]">
                 <canvas
                   ref={maskCanvasRef}
                   className="hidden"
@@ -1252,14 +1252,14 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
           </div>
         </section>
 
-        <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-slate-200 bg-white p-3 max-[980px]:col-span-2 max-[980px]:border-l-0 max-[980px]:border-t max-[720px]:col-span-1">
+        <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-slate-200 bg-white p-3 max-[980px]:col-span-2 max-[980px]:border-l-0 max-[980px]:border-t max-[720px]:order-3 max-[720px]:col-span-1 max-[720px]:overflow-visible max-[720px]:rounded-[28px] max-[720px]:border max-[720px]:border-slate-200/80 max-[720px]:shadow-sm">
           <div>
             <h2 className="text-lg font-black">Pokemon card studio</h2>
             <p className="text-xs font-bold text-slate-500">Place the colored Pokemon on a card, choose a scene, and tune battle details.</p>
           </div>
 
           <div
-            className="mx-auto w-full max-w-[380px] rounded-[28px] p-2 shadow-[0_18px_40px_rgba(15,23,42,0.22)]"
+            className="mx-auto w-full max-w-[380px] rounded-[28px] p-2 shadow-[0_18px_40px_rgba(15,23,42,0.22)] max-[720px]:max-w-[min(100%,360px)]"
             style={{ backgroundColor: cardBorderColor }}
           >
             <div className="relative aspect-[63/88] overflow-hidden rounded-[22px] border-2 border-white/50 bg-slate-800 p-2">
@@ -1455,7 +1455,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
             </label>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2 max-[430px]:grid-cols-1">
             <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
               Weakness
               <input className="h-10 rounded-lg border-2 border-slate-200 px-3 text-slate-950" value={weakness} onChange={(event) => setWeakness(event.target.value)} />
@@ -1531,6 +1531,46 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
           </div>
         </aside>
       </div>
+
+      <nav className="fixed inset-x-3 bottom-3 z-40 hidden items-center justify-between gap-2 rounded-full border border-slate-200/80 bg-white/94 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.20)] backdrop-blur max-[720px]:flex" aria-label="Mobile quick actions">
+        <button
+          aria-label="Open color palette"
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-slate-950 px-3 text-xs font-black text-white"
+          type="button"
+          onClick={() => setIsColorPickerOpen((isOpen) => !isOpen)}
+        >
+          <span className="size-5 rounded-full ring-1 ring-white/40" style={{ background: getPaintPreview(selectedPaint) }} />
+          Color
+        </button>
+        <button
+          aria-label="Undo"
+          className="grid size-12 place-items-center rounded-full border border-slate-200 bg-white text-slate-950 disabled:opacity-40"
+          disabled={!canUndo}
+          type="button"
+          onClick={undoFill}
+        >
+          <Undo2 aria-hidden="true" size={18} />
+        </button>
+        <button
+          aria-label="Place on card"
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-amber-400 px-3 text-xs font-black text-slate-950 disabled:opacity-40"
+          disabled={!imageUrl}
+          type="button"
+          onClick={placeOnCard}
+        >
+          <Layers aria-hidden="true" size={18} />
+          Card
+        </button>
+        <button
+          aria-label="Download PNG"
+          className="grid size-12 place-items-center rounded-full bg-slate-950 text-white disabled:opacity-40"
+          disabled={!imageUrl}
+          type="button"
+          onClick={downloadColoringPage}
+        >
+          <Download aria-hidden="true" size={18} />
+        </button>
+      </nav>
     </main>
   );
 }
