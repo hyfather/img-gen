@@ -61,7 +61,14 @@ type PaintOption = {
   id: string;
   label: string;
   color: string;
-  kind?: "solid" | "premium-gold" | "premium-silver";
+  kind?:
+    | "solid"
+    | "premium-gold"
+    | "premium-silver"
+    | "holo-rainbow"
+    | "pearl-foil"
+    | "shadow-foil";
+  rarity?: "rare" | "ultra-rare";
 };
 
 const CANVAS_SIZE = 1024;
@@ -74,58 +81,94 @@ const MODEL_OPTIONS = [
 ];
 const COLOR_PALETTES: { label: string; colors: PaintOption[] }[] = [
   {
-    label: "Signature",
+    label: "Partner Sparks",
     colors: [
-      { id: "citrine-bolt", label: "Citrine bolt", color: "#F6C945" },
-      { id: "apricot-flare", label: "Apricot flare", color: "#F58A5C" },
-      { id: "coral-pulse", label: "Coral pulse", color: "#E95B63" },
-      { id: "peony-glow", label: "Peony glow", color: "#E87DB2" },
-      { id: "orchid-aura", label: "Orchid aura", color: "#9B7BEA" },
-      { id: "lapis-current", label: "Lapis current", color: "#4F8FEA" },
-      { id: "aqua-spark", label: "Aqua spark", color: "#41C7C7" },
-      { id: "verdant-leaf", label: "Verdant leaf", color: "#62B66A" },
+      { id: "pikachu-zap", label: "Pikachu zap", color: "#F8D84A" },
+      { id: "eevee-ruff", label: "Eevee ruff", color: "#B9824B" },
+      { id: "jigglypuff-blush", label: "Jigglypuff blush", color: "#F2A7C8" },
+      { id: "meowth-coin", label: "Meowth coin", color: "#D6A94D" },
+      { id: "psyduck-cream", label: "Psyduck cream", color: "#F6D875" },
+      { id: "snorlax-teal", label: "Snorlax teal", color: "#2D8EA0" },
+      { id: "lapras-shell", label: "Lapras shell", color: "#7EC9E6" },
+      { id: "bulba-sprout", label: "Bulba sprout", color: "#68B96E" },
     ],
   },
   {
-    label: "Elemental",
+    label: "Starter Trails",
     colors: [
-      { id: "ember-clay", label: "Ember clay", color: "#B85C38" },
-      { id: "lava-rose", label: "Lava rose", color: "#D84C4C" },
-      { id: "glacier-blue", label: "Glacier blue", color: "#7BB8E8" },
-      { id: "tidal-indigo", label: "Tidal indigo", color: "#3569B7" },
-      { id: "fern-shadow", label: "Fern shadow", color: "#3F7D52" },
-      { id: "moss-gold", label: "Moss gold", color: "#9C8F3A" },
-      { id: "sandstone", label: "Sandstone", color: "#C9A26A" },
-      { id: "basalt", label: "Basalt", color: "#46515E" },
+      { id: "ember-tail", label: "Ember tail", color: "#E85F3A" },
+      { id: "charizard-flame", label: "Charizard flame", color: "#F28B34" },
+      { id: "squirtle-splash", label: "Squirtle splash", color: "#53A9E8" },
+      { id: "blastoise-cannon", label: "Blastoise cannon", color: "#2F6FBB" },
+      { id: "vine-whip", label: "Vine whip", color: "#4FAF5E" },
+      { id: "venusaur-leaf", label: "Venusaur leaf", color: "#2E7D52" },
+      { id: "chikorita-mint", label: "Chikorita mint", color: "#A6D96F" },
+      { id: "mudkip-blue", label: "Mudkip blue", color: "#5CA8D8" },
     ],
   },
   {
-    label: "Atmosphere",
+    label: "Energy Badges",
     colors: [
-      { id: "porcelain", label: "Porcelain", color: "#F8F5EF" },
-      { id: "warm-ivory", label: "Warm ivory", color: "#EFE4D2" },
-      { id: "petal-mist", label: "Petal mist", color: "#F3C9D8" },
-      { id: "peach-veil", label: "Peach veil", color: "#F2C3A3" },
-      { id: "mint-haze", label: "Mint haze", color: "#B9DDC0" },
-      { id: "sea-glass", label: "Sea glass", color: "#A9D8D4" },
-      { id: "moon-lilac", label: "Moon lilac", color: "#C9C2E8" },
-      { id: "ink-wash", label: "Ink wash", color: "#202833" },
+      { id: "thunder-stone", label: "Thunder stone", color: "#FACC15" },
+      { id: "fire-stone", label: "Fire stone", color: "#EF4444" },
+      { id: "water-stone", label: "Water stone", color: "#38BDF8" },
+      { id: "leaf-stone", label: "Leaf stone", color: "#22C55E" },
+      { id: "ice-crystal", label: "Ice crystal", color: "#A5F3FC" },
+      { id: "psychic-glow", label: "Psychic glow", color: "#D946EF" },
+      { id: "fairy-ribbon", label: "Fairy ribbon", color: "#FB7185" },
+      { id: "dragon-scale", label: "Dragon scale", color: "#7C3AED" },
     ],
   },
   {
-    label: "Premium",
+    label: "Legend Tones",
+    colors: [
+      { id: "mewtwo-aura", label: "Mewtwo aura", color: "#8B5CF6" },
+      { id: "mew-bubble", label: "Mew bubble", color: "#F0A6D8" },
+      { id: "lugia-silver", label: "Lugia silver", color: "#CBD5E1" },
+      { id: "ho-oh-plume", label: "Ho-Oh plume", color: "#F97316" },
+      { id: "rayquaza-jade", label: "Rayquaza jade", color: "#15803D" },
+      { id: "giratina-shadow", label: "Giratina shadow", color: "#4C1D95" },
+      { id: "solgaleo-white", label: "Solgaleo white", color: "#F8FAFC" },
+      { id: "lunala-violet", label: "Lunala violet", color: "#4338CA" },
+    ],
+  },
+  {
+    label: "Rare Sheens",
     colors: [
       {
         id: "premium-gold",
         label: "Holographic champagne gold",
         color: "#D8B15D",
         kind: "premium-gold",
+        rarity: "ultra-rare",
       },
       {
         id: "premium-silver",
         label: "Liquid platinum silver",
         color: "#C9D1DA",
         kind: "premium-silver",
+        rarity: "ultra-rare",
+      },
+      {
+        id: "holo-rainbow",
+        label: "Secret rare rainbow foil",
+        color: "#E879F9",
+        kind: "holo-rainbow",
+        rarity: "ultra-rare",
+      },
+      {
+        id: "pearl-foil",
+        label: "Prismatic pearl foil",
+        color: "#F8FAFC",
+        kind: "pearl-foil",
+        rarity: "rare",
+      },
+      {
+        id: "shadow-foil",
+        label: "Black star shadow foil",
+        color: "#1F2937",
+        kind: "shadow-foil",
+        rarity: "rare",
       },
     ],
   },
@@ -136,8 +179,8 @@ const INITIAL_RECENT_PAINTS = [
   COLOR_PALETTES[0].colors[2],
   COLOR_PALETTES[0].colors[5],
   COLOR_PALETTES[1].colors[4],
-  COLOR_PALETTES[2].colors[0],
-  COLOR_PALETTES[3].colors[0],
+  COLOR_PALETTES[2].colors[5],
+  COLOR_PALETTES[4].colors[0],
 ];
 const RECENT_PAINT_LIMIT = 6;
 
@@ -206,44 +249,110 @@ function hexToRgba(fillColor: string) {
   };
 }
 
+function mixChannel(start: number, end: number, amount: number) {
+  return Math.round(start + (end - start) * amount);
+}
+
+function mixRgb(
+  start: { r: number; g: number; b: number },
+  end: { r: number; g: number; b: number },
+  amount: number,
+) {
+  return {
+    r: mixChannel(start.r, end.r, amount),
+    g: mixChannel(start.g, end.g, amount),
+    b: mixChannel(start.b, end.b, amount),
+    a: 255,
+  };
+}
+
 function getPaintPreview(paint: PaintOption) {
   if (paint.kind === "premium-gold") {
-    return "linear-gradient(135deg, #9c7334 0%, #d8b15d 28%, #fff6c7 48%, #c99844 66%, #f4df9f 100%)";
+    return "linear-gradient(135deg, #7a4d18 0%, #d8b15d 24%, #fff6c7 42%, #c99844 62%, #f4df9f 78%, #8f5f21 100%)";
   }
 
   if (paint.kind === "premium-silver") {
-    return "linear-gradient(135deg, #7e8b99 0%, #c9d1da 30%, #fafcff 50%, #aab4bf 68%, #eef2f7 100%)";
+    return "linear-gradient(135deg, #64748b 0%, #c9d1da 26%, #fafcff 48%, #94a3b8 68%, #eef2f7 86%, #475569 100%)";
+  }
+
+  if (paint.kind === "holo-rainbow") {
+    return "conic-gradient(from 35deg, #f43f5e, #facc15, #22c55e, #38bdf8, #8b5cf6, #f472b6, #f43f5e)";
+  }
+
+  if (paint.kind === "pearl-foil") {
+    return "linear-gradient(135deg, #ffffff 0%, #dbeafe 22%, #fce7f3 44%, #fef9c3 62%, #dcfce7 80%, #ffffff 100%)";
+  }
+
+  if (paint.kind === "shadow-foil") {
+    return "linear-gradient(135deg, #030712 0%, #1f2937 24%, #6d28d9 42%, #0f172a 64%, #22d3ee 76%, #020617 100%)";
   }
 
   return paint.color;
 }
 
 function getPaintRgba(paint: PaintOption, x: number, y: number) {
-  if (paint.kind === "premium-gold" || paint.kind === "premium-silver") {
+  if (
+    paint.kind === "premium-gold" ||
+    paint.kind === "premium-silver" ||
+    paint.kind === "pearl-foil" ||
+    paint.kind === "shadow-foil"
+  ) {
     const base =
       paint.kind === "premium-gold"
         ? { r: 216, g: 177, b: 93 }
-        : { r: 201, g: 209, b: 218 };
+        : paint.kind === "premium-silver"
+          ? { r: 201, g: 209, b: 218 }
+          : paint.kind === "pearl-foil"
+            ? { r: 240, g: 245, b: 255 }
+            : { r: 31, g: 41, b: 55 };
     const highlight =
       paint.kind === "premium-gold"
         ? { r: 255, g: 246, b: 199 }
-        : { r: 250, g: 252, b: 255 };
+        : paint.kind === "premium-silver"
+          ? { r: 250, g: 252, b: 255 }
+          : paint.kind === "pearl-foil"
+            ? { r: 255, g: 255, b: 255 }
+            : { r: 34, g: 211, b: 238 };
     const shadow =
       paint.kind === "premium-gold"
         ? { r: 156, g: 115, b: 52 }
-        : { r: 126, g: 139, b: 153 };
+        : paint.kind === "premium-silver"
+          ? { r: 126, g: 139, b: 153 }
+          : paint.kind === "pearl-foil"
+            ? { r: 216, g: 180, b: 254 }
+            : { r: 2, g: 6, b: 23 };
     const shimmer =
-      (Math.sin((x + y) / 42) + Math.sin((x - y) / 86) + 2) / 4;
-    const sparkle = (x * 3 + y * 5) % 211 < 3 ? 0.18 : 0;
+      (Math.sin((x + y) / 38) + Math.sin((x - y) / 74) + 2) / 4;
+    const sparkle = (x * 3 + y * 5) % 211 < 4 ? 0.22 : 0;
     const mix = Math.min(1, shimmer * 0.62 + sparkle);
     const low = shimmer < 0.22 ? shadow : base;
 
-    return {
-      r: Math.round(low.r + (highlight.r - low.r) * mix),
-      g: Math.round(low.g + (highlight.g - low.g) * mix),
-      b: Math.round(low.b + (highlight.b - low.b) * mix),
-      a: 255,
-    };
+    return mixRgb(low, highlight, mix);
+  }
+
+  if (paint.kind === "holo-rainbow") {
+    const band = (Math.sin((x + y) / 58) + 1) / 2;
+    const sweep = (Math.sin((x - y) / 91) + 1) / 2;
+    const sparkle = (x * 7 + y * 11) % 317 < 5 ? 0.26 : 0;
+    const colors = [
+      { r: 244, g: 63, b: 94 },
+      { r: 250, g: 204, b: 21 },
+      { r: 34, g: 197, b: 94 },
+      { r: 56, g: 189, b: 248 },
+      { r: 139, g: 92, b: 246 },
+      { r: 244, g: 114, b: 182 },
+    ];
+    const position = ((x / CANVAS_SIZE + y / CANVAS_SIZE + band + sweep) / 4) *
+      colors.length;
+    const startIndex = Math.floor(position) % colors.length;
+    const endIndex = (startIndex + 1) % colors.length;
+    const mixed = mixRgb(
+      colors[startIndex],
+      colors[endIndex],
+      position - Math.floor(position),
+    );
+
+    return mixRgb(mixed, { r: 255, g: 255, b: 255 }, sparkle);
   }
 
   return hexToRgba(paint.color);
@@ -1136,13 +1245,13 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative max-[720px]:static">
-                <div className="flex h-11 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 shadow-sm">
+                <div className="flex h-12 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 shadow-sm">
                   {recentPaints.map((paint) => (
                     <button
                       key={paint.id}
                       aria-label={`Use recent color ${paint.label}`}
                       title={paint.label}
-                      className={`size-7 rounded-full border-2 transition hover:scale-105 ${
+                      className={`relative size-8 rounded-full border-2 transition hover:scale-105 ${
                         selectedPaint.id === paint.id
                           ? "border-slate-950"
                           : "border-white"
@@ -1150,12 +1259,20 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                       style={{ background: getPaintPreview(paint) }}
                       type="button"
                       onClick={() => selectPaint(paint)}
-                    />
+                    >
+                      {paint.rarity ? (
+                        <Sparkles
+                          aria-hidden="true"
+                          className="absolute -right-1 -top-1 rounded-full bg-slate-950 p-0.5 text-white"
+                          size={13}
+                        />
+                      ) : null}
+                    </button>
                   ))}
                   <button
                     aria-expanded={isColorPickerOpen}
                     aria-label="Open color palette"
-                    className="ml-1 flex h-8 items-center gap-2 rounded-full bg-slate-950 px-3 text-xs font-black text-white"
+                    className="ml-1 flex h-9 max-w-[180px] items-center gap-2 rounded-full bg-slate-950 px-3 text-xs font-black text-white"
                     type="button"
                     onClick={() => setIsColorPickerOpen((isOpen) => !isOpen)}
                   >
@@ -1163,24 +1280,41 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                       className="size-4 rounded-full ring-1 ring-white/40"
                       style={{ background: getPaintPreview(selectedPaint) }}
                     />
+                    <span className="truncate max-[760px]:hidden">
+                      {selectedPaint.label}
+                    </span>
                     <Palette aria-hidden="true" size={15} />
                   </button>
                 </div>
 
                 {isColorPickerOpen ? (
-                  <div className="absolute right-0 top-12 z-20 w-[min(88vw,430px)] rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur max-[720px]:fixed max-[720px]:inset-x-3 max-[720px]:bottom-[calc(86px+env(safe-area-inset-bottom))] max-[720px]:top-auto max-[720px]:z-50 max-[720px]:w-auto max-[720px]:rounded-[28px]">
+                  <div className="absolute right-0 top-14 z-20 w-[min(90vw,500px)] rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur max-[720px]:fixed max-[720px]:inset-x-3 max-[720px]:bottom-[calc(86px+env(safe-area-inset-bottom))] max-[720px]:top-auto max-[720px]:z-50 max-[720px]:w-auto max-[720px]:rounded-[28px]">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span
+                          className="grid size-12 shrink-0 place-items-center rounded-xl border border-slate-200 shadow-inner"
+                          style={{ background: getPaintPreview(selectedPaint) }}
+                        >
+                          {selectedPaint.rarity ? (
+                            <Sparkles
+                              aria-hidden="true"
+                              className="text-white drop-shadow"
+                              size={18}
+                            />
+                          ) : null}
+                        </span>
+                        <div className="min-w-0">
                         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
                           Palette
                         </p>
-                        <p className="text-sm font-black text-slate-950">
+                        <p className="truncate text-sm font-black text-slate-950">
                           {selectedPaint.label}
                         </p>
+                        </div>
                       </div>
                       <input
                         aria-label="Custom color"
-                        className="size-9 rounded-full border border-slate-200 bg-white p-1"
+                        className="size-11 shrink-0 rounded-xl border border-slate-200 bg-white p-1"
                         type="color"
                         value={customColor}
                         onChange={(event) => {
@@ -1200,13 +1334,19 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                           <p className="px-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
                             {palette.label}
                           </p>
-                          <div className="grid grid-cols-8 gap-1.5">
+                          <div
+                            className={
+                              palette.label === "Rare Sheens"
+                                ? "grid grid-cols-5 gap-2"
+                                : "grid grid-cols-8 gap-1.5 max-[420px]:grid-cols-4"
+                            }
+                          >
                             {palette.colors.map((paint) => (
                               <button
                                 key={paint.id}
                                 aria-label={`Use ${paint.label}`}
                                 title={paint.label}
-                                className={`aspect-square rounded-full border-2 transition hover:scale-105 ${
+                                className={`relative aspect-square rounded-xl border-2 transition hover:scale-105 ${
                                   selectedPaint.id === paint.id
                                     ? "border-slate-950"
                                     : "border-white"
@@ -1214,7 +1354,15 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                                 style={{ background: getPaintPreview(paint) }}
                                 type="button"
                                 onClick={() => selectPaint(paint)}
-                              />
+                              >
+                                {paint.rarity ? (
+                                  <Sparkles
+                                    aria-hidden="true"
+                                    className="absolute bottom-1 right-1 rounded-full bg-slate-950/85 p-0.5 text-white"
+                                    size={14}
+                                  />
+                                ) : null}
+                              </button>
                             ))}
                           </div>
                         </div>
