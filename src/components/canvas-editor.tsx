@@ -58,6 +58,28 @@ const SWATCHES = [
   "#94a3b8",
   "#ffffff",
 ];
+
+const CARD_BORDER_SWATCHES = ["#facc15", "#f97316", "#38bdf8", "#22c55e", "#a78bfa", "#f8fafc", "#0f172a"];
+const TYPE_ICON_STYLES: Record<PokemonType, { label: string; glyph: string; color: string; textColor?: string }> = {
+  normal: { label: "Normal", glyph: "★", color: "#c9c3b8", textColor: "#1f2937" },
+  fire: { label: "Fire", glyph: "♨", color: "#f97316" },
+  water: { label: "Water", glyph: "●", color: "#38bdf8" },
+  electric: { label: "Electric", glyph: "⚡", color: "#facc15", textColor: "#111827" },
+  grass: { label: "Grass", glyph: "✿", color: "#22c55e" },
+  ice: { label: "Ice", glyph: "❄", color: "#67e8f9", textColor: "#0f172a" },
+  fighting: { label: "Fighting", glyph: "✊", color: "#dc2626" },
+  poison: { label: "Poison", glyph: "☠", color: "#a855f7" },
+  ground: { label: "Ground", glyph: "◆", color: "#d97706" },
+  flying: { label: "Flying", glyph: "✦", color: "#60a5fa" },
+  psychic: { label: "Psychic", glyph: "☯", color: "#ec4899" },
+  bug: { label: "Bug", glyph: "✣", color: "#84cc16", textColor: "#172554" },
+  rock: { label: "Rock", glyph: "⬟", color: "#78716c" },
+  ghost: { label: "Ghost", glyph: "◉", color: "#7c3aed" },
+  dragon: { label: "Dragon", glyph: "✹", color: "#8b5cf6" },
+  dark: { label: "Dark", glyph: "☾", color: "#44403c" },
+  steel: { label: "Steel", glyph: "⬢", color: "#94a3b8", textColor: "#0f172a" },
+  fairy: { label: "Fairy", glyph: "✧", color: "#fb7185" },
+};
 const POSE_OPTIONS: PoseOption[] = [
   { id: "standing", label: "Standing" },
   { id: "sitting", label: "Sitting" },
@@ -140,6 +162,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
   const [cardHp, setCardHp] = useState(60);
   const [cardType, setCardType] = useState<PokemonType>(selectedPokemon.type);
+  const [cardBorderColor, setCardBorderColor] = useState("#facc15");
+  const cardTypeStyle = TYPE_ICON_STYLES[cardType];
 
   function clearAllCanvases() {
     for (const canvas of [
@@ -845,31 +869,94 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
             <p className="text-xs font-bold text-slate-500">Place the colored Pokemon on a card, choose a scene, and tune battle details.</p>
           </div>
 
-          <div className="rounded-2xl border-4 border-yellow-400 bg-yellow-300 p-3 shadow-xl">
-            <div className="rounded-xl border-2 border-slate-900 bg-white p-2">
-              <div className="mb-2 flex items-end justify-between gap-2">
-                <h3 className="truncate text-xl font-black">{selectedPokemon.name}</h3>
-                <div className="flex items-center gap-1 text-lg font-black text-red-600">
-                  <span className="text-xs text-slate-500">HP</span> {cardHp}
-                  <span className="grid size-7 place-items-center rounded-full text-sm text-white" style={{ backgroundColor: POKEMON_TYPE_GROUPS.find((group) => group.id === cardType)?.color ?? "#64748b" }}>
-                    {cardType.slice(0, 1).toUpperCase()}
-                  </span>
+          <div
+            className="rounded-[28px] p-2 shadow-[0_18px_40px_rgba(15,23,42,0.18)]"
+            style={{ backgroundColor: cardBorderColor }}
+          >
+            <div className="rounded-[22px] border-2 border-yellow-500/60 bg-gradient-to-br from-yellow-200 via-yellow-100 to-yellow-300 p-3">
+              <div className="rounded-[18px] border-[3px] border-slate-900 bg-gradient-to-br from-slate-50 via-white to-slate-100 p-3 shadow-inner">
+                <div className="mb-2 flex items-start justify-between gap-2 border-b border-slate-300/80 pb-1">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">
+                      Basic Pokemon
+                    </p>
+                    <h3 className="truncate text-2xl font-black leading-none tracking-tight text-slate-950">
+                      {selectedPokemon.name}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black uppercase tracking-tight text-slate-500">
+                      HP
+                    </span>
+                    <span className="text-2xl font-black leading-none text-red-600">
+                      {cardHp}
+                    </span>
+                    <span
+                      aria-label={`${cardTypeStyle.label} energy`}
+                      className="grid size-10 place-items-center rounded-full border-2 border-white text-xl font-black shadow-[inset_0_2px_5px_rgba(255,255,255,0.65),0_2px_6px_rgba(15,23,42,0.25)]"
+                      style={{
+                        backgroundColor: cardTypeStyle.color,
+                        color: cardTypeStyle.textColor ?? "#ffffff",
+                      }}
+                      title={`${cardTypeStyle.label} energy`}
+                    >
+                      {cardTypeStyle.glyph}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div className="relative aspect-[4/3] overflow-hidden rounded-lg border-2 border-slate-900 bg-slate-100">
-                {selectedBackground ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img alt="Selected card background" className="absolute inset-0 size-full object-cover" src={selectedBackground} />
-                ) : null}
-                {cardImageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img alt="Colored Pokemon on card" className="absolute inset-x-8 bottom-0 mx-auto h-[88%] w-auto object-contain drop-shadow-[0_10px_12px_rgba(15,23,42,0.28)]" src={cardImageUrl} />
-                ) : (
-                  <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm font-black text-slate-500">Color a Pokemon, then place it here.</div>
-                )}
-              </div>
-              <div className="mt-2 rounded-lg bg-slate-100 p-2 text-xs font-bold text-slate-700">
-                Type: <span className="font-black capitalize">{cardType}</span> · Custom trainer card
+
+                <div className="relative aspect-[4/3] overflow-hidden rounded-sm border-[3px] border-slate-900 bg-slate-100 shadow-[inset_0_0_0_2px_rgba(255,255,255,0.55)]">
+                  {selectedBackground ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      alt="Selected card background"
+                      className="absolute inset-0 size-full object-cover"
+                      src={selectedBackground}
+                    />
+                  ) : null}
+                  <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-white/55 to-transparent" />
+                  {cardImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      alt="Colored Pokemon on card"
+                      className="absolute inset-x-6 bottom-1 mx-auto h-[90%] w-auto object-contain drop-shadow-[0_12px_10px_rgba(15,23,42,0.35)]"
+                      src={cardImageUrl}
+                    />
+                  ) : (
+                    <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm font-black text-slate-500">
+                      Color a Pokemon, then place it here.
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-1 border-x-[3px] border-b-[3px] border-slate-900 bg-yellow-100 px-2 py-1 text-center text-[10px] font-bold italic text-slate-700">
+                  Custom Pokemon · Trainer art · Illustrator: Canvas Camp
+                </div>
+
+                <div className="mt-3 rounded-sm border-y-2 border-slate-300 bg-white/85 p-2">
+                  <div className="flex items-center gap-2 text-sm font-black text-slate-950">
+                    <span
+                      className="grid size-6 place-items-center rounded-full border border-white text-xs shadow"
+                      style={{
+                        backgroundColor: cardTypeStyle.color,
+                        color: cardTypeStyle.textColor ?? "#ffffff",
+                      }}
+                    >
+                      {cardTypeStyle.glyph}
+                    </span>
+                    Color Burst
+                    <span className="ml-auto text-lg">30</span>
+                  </div>
+                  <p className="mt-1 text-[11px] font-semibold leading-snug text-slate-600">
+                    This custom card uses your colored Pokemon artwork with a trainer-made background.
+                  </p>
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-1 border-t border-slate-300 pt-2 text-center text-[10px] font-black uppercase text-slate-500">
+                  <span>Weakness ×2</span>
+                  <span>Resistance -30</span>
+                  <span>Retreat ★</span>
+                </div>
               </div>
             </div>
           </div>
@@ -878,6 +965,31 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
             HP
             <input className="h-10 rounded-lg border-2 border-slate-200 px-3 text-slate-950" min="10" max="340" step="10" type="number" value={cardHp} onChange={(event) => setCardHp(Number(event.target.value) || 10)} />
           </label>
+
+          <div className="grid gap-2 text-xs font-black uppercase text-slate-500">
+            Border
+            <div className="flex flex-wrap items-center gap-2">
+              {CARD_BORDER_SWATCHES.map((swatch) => (
+                <button
+                  key={swatch}
+                  aria-label={`Use card border ${swatch}`}
+                  className={`size-9 rounded-lg border-2 shadow-sm ${
+                    cardBorderColor === swatch ? "border-slate-950" : "border-white"
+                  }`}
+                  style={{ backgroundColor: swatch }}
+                  type="button"
+                  onClick={() => setCardBorderColor(swatch)}
+                />
+              ))}
+              <input
+                aria-label="Custom card border"
+                className="size-10 rounded-lg border-2 border-slate-200 bg-white p-1"
+                type="color"
+                value={cardBorderColor}
+                onChange={(event) => setCardBorderColor(event.target.value)}
+              />
+            </div>
+          </div>
 
           <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
             Type icon
