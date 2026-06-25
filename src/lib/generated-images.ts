@@ -1,6 +1,6 @@
 import { readdir, stat, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { list, put } from "@vercel/blob";
+import { list, put, type ListCommandOptions, type PutCommandOptions } from "@vercel/blob";
 
 export const GENERATED_DIR = "generated-coloring-pages";
 
@@ -20,6 +20,11 @@ type SaveGeneratedImageOptions = {
   pose: string;
 };
 
+type BlobCommandAuthOptions = Pick<
+  ListCommandOptions,
+  "oidcToken" | "storeId" | "token"
+>;
+
 export function slugify(value: string) {
   return value
     .toLowerCase()
@@ -27,11 +32,37 @@ export function slugify(value: string) {
     .replace(/(^-|-$)/g, "");
 }
 
+function getBlobReadWriteToken() {
+  return process.env.PUBLIC_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
+}
+
+function getBlobStoreId() {
+  return process.env.PUBLIC_STORE_ID || process.env.BLOB_STORE_ID;
+}
+
+function getBlobOidcToken() {
+  return process.env.VERCEL_OIDC_TOKEN;
+}
+
 function hasBlobConfig() {
-  return Boolean(
-    process.env.BLOB_READ_WRITE_TOKEN ||
-      (process.env.BLOB_STORE_ID && process.env.VERCEL_OIDC_TOKEN),
-  );
+  return Boolean(getBlobReadWriteToken() || (getBlobStoreId() && getBlobOidcToken()));
+}
+
+function getBlobAuthOptions(): BlobCommandAuthOptions {
+  const token = getBlobReadWriteToken();
+
+  if (token) {
+    return { token };
+  }
+
+  const storeId = getBlobStoreId();
+  const oidcToken = getBlobOidcToken();
+
+  if (storeId && oidcToken) {
+    return { oidcToken, storeId };
+  }
+
+  return {};
 }
 
 function isVercelRuntime() {
@@ -44,7 +75,7 @@ function shouldUseBlobStore() {
 
 export function getGeneratedImageStorageError() {
   if (isVercelRuntime() && !hasBlobConfig()) {
-    return "Vercel Blob is not configured. Add BLOB_READ_WRITE_TOKEN, or enable Blob OIDC with BLOB_STORE_ID and VERCEL_OIDC_TOKEN.";
+    return "Vercel Blob is not configured. Add PUBLIC_READ_WRITE_TOKEN, or set PUBLIC_STORE_ID with VERCEL_OIDC_TOKEN.";
   }
 
   return "";
@@ -183,6 +214,7 @@ export async function listGeneratedImages(
   }
 
   const result = await list({
+    ...getBlobAuthOptions(),
     limit: 24,
     prefix: generatedPrefix(pokemonName, pose),
   });
@@ -214,12 +246,14 @@ export async function saveGeneratedImage(
   const prefix = generatedPrefix(options.pokemonName, options.pose);
   const pathname = `${prefix}${Date.now()}.${options.extension}`;
   const bytes = Buffer.from(options.base64, "base64");
-  const blob = await put(pathname, bytes, {
+  const blobOptions: PutCommandOptions = {
+    ...getBlobAuthOptions(),
     access: "public",
     addRandomSuffix: false,
     cacheControlMaxAge: 31536000,
     contentType: options.contentType,
-  });
+  };
+  const blob = await put(pathname, bytes, blobOptions);
 
   return {
     downloadUrl: blob.downloadUrl,
