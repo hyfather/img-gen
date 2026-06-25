@@ -6,6 +6,7 @@ import {
   Image as ImageIcon,
   Loader2,
   PaintBucket,
+  Palette,
   Sparkles,
   Undo2,
 } from "lucide-react";
@@ -107,6 +108,15 @@ const COLOR_PALETTES: { label: string; colors: PaintOption[] }[] = [
   },
 ];
 const DEFAULT_PAINT = COLOR_PALETTES[0].colors[0];
+const INITIAL_RECENT_PAINTS = [
+  DEFAULT_PAINT,
+  COLOR_PALETTES[0].colors[2],
+  COLOR_PALETTES[0].colors[5],
+  COLOR_PALETTES[1].colors[4],
+  COLOR_PALETTES[2].colors[0],
+  COLOR_PALETTES[3].colors[0],
+];
+const RECENT_PAINT_LIMIT = 6;
 const POSE_OPTIONS: PoseOption[] = [
   { id: "standing", label: "Standing" },
   { id: "sitting", label: "Sitting" },
@@ -220,7 +230,10 @@ export function CanvasEditor() {
     POKEMON_TYPE_GROUPS[0].pokemon[0],
   );
   const [selectedPaint, setSelectedPaint] = useState<PaintOption>(DEFAULT_PAINT);
-  const [customColor, setCustomColor] = useState("#facc15");
+  const [recentPaints, setRecentPaints] =
+    useState<PaintOption[]>(INITIAL_RECENT_PAINTS);
+  const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
+  const [customColor, setCustomColor] = useState("#F6C945");
   const [selectedPose, setSelectedPose] = useState(POSE_OPTIONS[0].id);
   const [imageUrl, setImageUrl] = useState("");
   const [model, setModel] = useState(DEFAULT_MODEL);
@@ -554,6 +567,14 @@ export function CanvasEditor() {
     [imageUrl],
   );
 
+  function selectPaint(paint: PaintOption) {
+    setSelectedPaint(paint);
+    setRecentPaints((currentPaints) => [
+      paint,
+      ...currentPaints.filter((currentPaint) => currentPaint.id !== paint.id),
+    ].slice(0, RECENT_PAINT_LIMIT));
+  }
+
   function handleCanvasPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -739,49 +760,94 @@ export function CanvasEditor() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="grid max-w-[560px] grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white/90 p-2 shadow-sm max-[980px]:max-w-full">
-                {COLOR_PALETTES.map((palette) => (
-                  <div key={palette.label} className="grid gap-1">
-                    <p className="px-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
-                      {palette.label}
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {palette.colors.map((paint) => (
-                        <button
-                          key={paint.id}
-                          aria-label={`Use ${paint.label}`}
-                          title={paint.label}
-                          className={`size-8 rounded-full border-2 transition hover:scale-105 ${
-                            selectedPaint.id === paint.id
-                              ? "border-slate-950"
-                              : "border-white"
-                          } shadow-sm ring-1 ring-slate-200`}
-                          style={{
-                            background: getPaintPreview(paint),
-                          }}
-                          type="button"
-                          onClick={() => setSelectedPaint(paint)}
-                        />
+              <div className="relative">
+                <div className="flex h-11 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 shadow-sm">
+                  {recentPaints.map((paint) => (
+                    <button
+                      key={paint.id}
+                      aria-label={`Use recent color ${paint.label}`}
+                      title={paint.label}
+                      className={`size-7 rounded-full border-2 transition hover:scale-105 ${
+                        selectedPaint.id === paint.id
+                          ? "border-slate-950"
+                          : "border-white"
+                      } ring-1 ring-slate-200`}
+                      style={{ background: getPaintPreview(paint) }}
+                      type="button"
+                      onClick={() => selectPaint(paint)}
+                    />
+                  ))}
+                  <button
+                    aria-expanded={isColorPickerOpen}
+                    aria-label="Open color palette"
+                    className="ml-1 flex h-8 items-center gap-2 rounded-full bg-slate-950 px-3 text-xs font-black text-white"
+                    type="button"
+                    onClick={() => setIsColorPickerOpen((isOpen) => !isOpen)}
+                  >
+                    <span
+                      className="size-4 rounded-full ring-1 ring-white/40"
+                      style={{ background: getPaintPreview(selectedPaint) }}
+                    />
+                    <Palette aria-hidden="true" size={15} />
+                  </button>
+                </div>
+
+                {isColorPickerOpen ? (
+                  <div className="absolute right-0 top-12 z-20 w-[min(88vw,430px)] rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                          Palette
+                        </p>
+                        <p className="text-sm font-black text-slate-950">
+                          {selectedPaint.label}
+                        </p>
+                      </div>
+                      <input
+                        aria-label="Custom color"
+                        className="size-9 rounded-full border border-slate-200 bg-white p-1"
+                        type="color"
+                        value={customColor}
+                        onChange={(event) => {
+                          const nextColor = event.target.value;
+                          setCustomColor(nextColor);
+                          selectPaint({
+                            id: `custom-${nextColor}`,
+                            label: "Custom color",
+                            color: nextColor,
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="grid gap-3">
+                      {COLOR_PALETTES.map((palette) => (
+                        <div key={palette.label} className="grid gap-1.5">
+                          <p className="px-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                            {palette.label}
+                          </p>
+                          <div className="grid grid-cols-8 gap-1.5">
+                            {palette.colors.map((paint) => (
+                              <button
+                                key={paint.id}
+                                aria-label={`Use ${paint.label}`}
+                                title={paint.label}
+                                className={`aspect-square rounded-full border-2 transition hover:scale-105 ${
+                                  selectedPaint.id === paint.id
+                                    ? "border-slate-950"
+                                    : "border-white"
+                                } shadow-sm ring-1 ring-slate-200`}
+                                style={{ background: getPaintPreview(paint) }}
+                                type="button"
+                                onClick={() => selectPaint(paint)}
+                              />
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
-                ))}
+                ) : null}
               </div>
-              <input
-                aria-label="Custom color"
-                className="size-11 rounded-lg border-2 border-slate-200 bg-white p-1"
-                type="color"
-                value={customColor}
-                onChange={(event) => {
-                  const nextColor = event.target.value;
-                  setCustomColor(nextColor);
-                  setSelectedPaint({
-                    id: `custom-${nextColor}`,
-                    label: "Custom color",
-                    color: nextColor,
-                  });
-                }}
-              />
               <button
                 aria-label="Undo"
                 className="grid size-11 place-items-center rounded-lg border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
