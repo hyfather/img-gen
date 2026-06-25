@@ -50,16 +50,20 @@ function stripCodeFence(value: string) {
   return value.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
 }
 
-function readJsonObject(value: string): GeneratedPayload {
+function readJsonObject(value: string): GeneratedPayload | null {
   const stripped = stripCodeFence(value);
   const firstBrace = stripped.indexOf("{");
   const lastBrace = stripped.lastIndexOf("}");
 
   if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    throw new Error("The model did not return a JSON object.");
+    return null;
   }
 
-  return JSON.parse(stripped.slice(firstBrace, lastBrace + 1)) as GeneratedPayload;
+  try {
+    return JSON.parse(stripped.slice(firstBrace, lastBrace + 1)) as GeneratedPayload;
+  } catch {
+    return null;
+  }
 }
 
 function sanitizeSvg(svg: unknown, viewBox: string) {
@@ -105,7 +109,14 @@ export async function POST(request: Request) {
     return jsonError("OPENROUTER_API_KEY is not configured.", 500);
   }
 
-  const body = (await request.json()) as GenerateRequest;
+  let body: GenerateRequest;
+
+  try {
+    body = (await request.json()) as GenerateRequest;
+  } catch {
+    return jsonError("Send a JSON request body.", 400);
+  }
+
   const description =
     typeof body.description === "string" ? body.description.trim() : "";
 
@@ -123,12 +134,13 @@ export async function POST(request: Request) {
 
   const pokemonType = body.pokemonType;
   const style = POKEMON_TYPES[pokemonType];
+  const origin = new URL(request.url).origin;
   const response = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "http://localhost:3000",
+      "HTTP-Referer": origin,
       "X-Title": "Canvas Camp Pokemon Generator",
     },
     body: JSON.stringify({
@@ -160,6 +172,11 @@ export async function POST(request: Request) {
   }
 
   const generated = readJsonObject(content);
+
+  if (!generated) {
+    return jsonError("OpenRouter returned invalid JSON.", 502);
+  }
+
   const hp = clamp(
     typeof generated.hp === "number" ? Math.round(generated.hp) : 70,
     10,

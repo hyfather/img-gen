@@ -485,7 +485,9 @@ export function CanvasEditor({
   const [selectedBackgroundSrc, setSelectedBackgroundSrc] = useState(
     backgrounds[0]?.src ?? "",
   );
-  const [generatedBackgrounds, setGeneratedBackgrounds] = useState<GeneratedBackground[]>([]);
+  const [generatedBackgrounds, setGeneratedBackgrounds] = useState<
+    GeneratedBackground[]
+  >([]);
   const [generateDescription, setGenerateDescription] = useState("");
   const [generateType, setGenerateType] = useState<PokemonType>("electric");
   const [generateStatus, setGenerateStatus] = useState("");
