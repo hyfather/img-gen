@@ -50,57 +50,57 @@ const MODEL_OPTIONS = [
 ];
 const COLOR_PALETTES: { label: string; colors: PaintOption[] }[] = [
   {
-    label: "Pokemon brights",
+    label: "Signature",
     colors: [
-      { id: "pika-yellow", label: "Pika yellow", color: "#facc15" },
-      { id: "ember-orange", label: "Ember orange", color: "#fb923c" },
-      { id: "charmander-red", label: "Charmander red", color: "#ef4444" },
-      { id: "squirtle-blue", label: "Squirtle blue", color: "#38bdf8" },
-      { id: "bulba-green", label: "Bulba green", color: "#22c55e" },
-      { id: "jiggly-pink", label: "Jiggly pink", color: "#f9a8d4" },
-      { id: "psychic-violet", label: "Psychic violet", color: "#a78bfa" },
-      { id: "ghost-purple", label: "Ghost purple", color: "#7c3aed" },
+      { id: "citrine-bolt", label: "Citrine bolt", color: "#F6C945" },
+      { id: "apricot-flare", label: "Apricot flare", color: "#F58A5C" },
+      { id: "coral-pulse", label: "Coral pulse", color: "#E95B63" },
+      { id: "peony-glow", label: "Peony glow", color: "#E87DB2" },
+      { id: "orchid-aura", label: "Orchid aura", color: "#9B7BEA" },
+      { id: "lapis-current", label: "Lapis current", color: "#4F8FEA" },
+      { id: "aqua-spark", label: "Aqua spark", color: "#41C7C7" },
+      { id: "verdant-leaf", label: "Verdant leaf", color: "#62B66A" },
     ],
   },
   {
-    label: "Nature tones",
+    label: "Elemental",
     colors: [
-      { id: "leaf-sprout", label: "Leaf sprout", color: "#84cc16" },
-      { id: "moss", label: "Moss", color: "#4d7c0f" },
-      { id: "sky", label: "Sky", color: "#7dd3fc" },
-      { id: "deep-sea", label: "Deep sea", color: "#2563eb" },
-      { id: "sand", label: "Sand", color: "#fcd34d" },
-      { id: "earth", label: "Earth", color: "#92400e" },
-      { id: "stone", label: "Stone", color: "#94a3b8" },
-      { id: "night", label: "Night", color: "#1e293b" },
+      { id: "ember-clay", label: "Ember clay", color: "#B85C38" },
+      { id: "lava-rose", label: "Lava rose", color: "#D84C4C" },
+      { id: "glacier-blue", label: "Glacier blue", color: "#7BB8E8" },
+      { id: "tidal-indigo", label: "Tidal indigo", color: "#3569B7" },
+      { id: "fern-shadow", label: "Fern shadow", color: "#3F7D52" },
+      { id: "moss-gold", label: "Moss gold", color: "#9C8F3A" },
+      { id: "sandstone", label: "Sandstone", color: "#C9A26A" },
+      { id: "basalt", label: "Basalt", color: "#46515E" },
     ],
   },
   {
-    label: "Soft accents",
+    label: "Atmosphere",
     colors: [
-      { id: "cream", label: "Cream", color: "#fff7ed" },
-      { id: "blush", label: "Blush", color: "#fecdd3" },
-      { id: "peach", label: "Peach", color: "#fed7aa" },
-      { id: "mint", label: "Mint", color: "#bbf7d0" },
-      { id: "aqua", label: "Aqua", color: "#a5f3fc" },
-      { id: "lavender", label: "Lavender", color: "#ddd6fe" },
-      { id: "white", label: "Paper white", color: "#ffffff" },
-      { id: "ink", label: "Ink black", color: "#111827" },
+      { id: "porcelain", label: "Porcelain", color: "#F8F5EF" },
+      { id: "warm-ivory", label: "Warm ivory", color: "#EFE4D2" },
+      { id: "petal-mist", label: "Petal mist", color: "#F3C9D8" },
+      { id: "peach-veil", label: "Peach veil", color: "#F2C3A3" },
+      { id: "mint-haze", label: "Mint haze", color: "#B9DDC0" },
+      { id: "sea-glass", label: "Sea glass", color: "#A9D8D4" },
+      { id: "moon-lilac", label: "Moon lilac", color: "#C9C2E8" },
+      { id: "ink-wash", label: "Ink wash", color: "#202833" },
     ],
   },
   {
-    label: "Premium sheens",
+    label: "Premium",
     colors: [
       {
         id: "premium-gold",
-        label: "Rare card gold",
-        color: "#f6c453",
+        label: "Holographic champagne gold",
+        color: "#D8B15D",
         kind: "premium-gold",
       },
       {
         id: "premium-silver",
-        label: "Shiny silver",
-        color: "#d8dee9",
+        label: "Liquid platinum silver",
+        color: "#C9D1DA",
         kind: "premium-silver",
       },
     ],
@@ -148,25 +148,37 @@ function hexToRgba(fillColor: string) {
   };
 }
 
+function getPaintPreview(paint: PaintOption) {
+  if (paint.kind === "premium-gold") {
+    return "linear-gradient(135deg, #9c7334 0%, #d8b15d 28%, #fff6c7 48%, #c99844 66%, #f4df9f 100%)";
+  }
+
+  if (paint.kind === "premium-silver") {
+    return "linear-gradient(135deg, #7e8b99 0%, #c9d1da 30%, #fafcff 50%, #aab4bf 68%, #eef2f7 100%)";
+  }
+
+  return paint.color;
+}
+
 function getPaintRgba(paint: PaintOption, x: number, y: number) {
   if (paint.kind === "premium-gold" || paint.kind === "premium-silver") {
     const base =
       paint.kind === "premium-gold"
-        ? { r: 214, g: 151, b: 34 }
-        : { r: 162, g: 174, b: 190 };
+        ? { r: 216, g: 177, b: 93 }
+        : { r: 201, g: 209, b: 218 };
     const highlight =
       paint.kind === "premium-gold"
-        ? { r: 255, g: 244, b: 174 }
-        : { r: 255, g: 255, b: 255 };
+        ? { r: 255, g: 246, b: 199 }
+        : { r: 250, g: 252, b: 255 };
     const shadow =
       paint.kind === "premium-gold"
-        ? { r: 140, g: 92, b: 18 }
-        : { r: 96, g: 111, b: 131 };
+        ? { r: 156, g: 115, b: 52 }
+        : { r: 126, g: 139, b: 153 };
     const shimmer =
-      (Math.sin((x + y) / 18) + Math.sin((x - y) / 37) + 2) / 4;
-    const sparkle = (x + y) % 97 < 5 ? 0.34 : 0;
-    const mix = Math.min(1, shimmer * 0.74 + sparkle);
-    const low = shimmer < 0.28 ? shadow : base;
+      (Math.sin((x + y) / 42) + Math.sin((x - y) / 86) + 2) / 4;
+    const sparkle = (x * 3 + y * 5) % 211 < 3 ? 0.18 : 0;
+    const mix = Math.min(1, shimmer * 0.62 + sparkle);
+    const low = shimmer < 0.22 ? shadow : base;
 
     return {
       r: Math.round(low.r + (highlight.r - low.r) * mix),
@@ -727,7 +739,7 @@ export function CanvasEditor() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="grid max-w-[520px] grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2 max-[980px]:max-w-full">
+              <div className="grid max-w-[560px] grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white/90 p-2 shadow-sm max-[980px]:max-w-full">
                 {COLOR_PALETTES.map((palette) => (
                   <div key={palette.label} className="grid gap-1">
                     <p className="px-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
@@ -739,18 +751,13 @@ export function CanvasEditor() {
                           key={paint.id}
                           aria-label={`Use ${paint.label}`}
                           title={paint.label}
-                          className={`size-8 rounded-lg border-2 transition hover:scale-105 ${
+                          className={`size-8 rounded-full border-2 transition hover:scale-105 ${
                             selectedPaint.id === paint.id
                               ? "border-slate-950"
                               : "border-white"
                           } shadow-sm ring-1 ring-slate-200`}
                           style={{
-                            background:
-                              paint.kind === "premium-gold"
-                                ? "linear-gradient(135deg, #8c5c12 0%, #f6c453 34%, #fff4ae 50%, #c9871e 68%, #fff0a3 100%)"
-                                : paint.kind === "premium-silver"
-                                  ? "linear-gradient(135deg, #607083 0%, #d8dee9 32%, #ffffff 50%, #9aa6b2 68%, #f8fafc 100%)"
-                                  : paint.color,
+                            background: getPaintPreview(paint),
                           }}
                           type="button"
                           onClick={() => setSelectedPaint(paint)}
