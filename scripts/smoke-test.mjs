@@ -4,13 +4,17 @@ import { chromium } from "playwright";
 const url = process.env.SMOKE_URL ?? "http://localhost:3000";
 const screenshotPath =
   process.env.SMOKE_SCREENSHOT ?? "/tmp/canvas-camp-smoke.png";
+const viewport = {
+  width: Number(process.env.SMOKE_WIDTH ?? 1180),
+  height: Number(process.env.SMOKE_HEIGHT ?? 820),
+};
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({
   deviceScaleFactor: 2,
   hasTouch: true,
   isMobile: false,
-  viewport: { width: 1180, height: 820 },
+  viewport,
 });
 const page = await context.newPage();
 const consoleErrors = [];
@@ -123,6 +127,20 @@ const after = await page.evaluate(() => {
     fillPixel: pixel ? Array.from(pixel) : [],
     linePixel: linePixel ? Array.from(linePixel) : [],
     compositePixel: compositePixel ? Array.from(compositePixel) : [],
+    layout: {
+      bodyClientHeight: document.body.clientHeight,
+      bodyScrollHeight: document.body.scrollHeight,
+      documentClientHeight: document.documentElement.clientHeight,
+      documentScrollHeight: document.documentElement.scrollHeight,
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth,
+      canvasCssSize: lineCanvas
+        ? {
+            height: Math.round(lineCanvas.getBoundingClientRect().height),
+            width: Math.round(lineCanvas.getBoundingClientRect().width),
+          }
+        : null,
+    },
     statusReady: document.body.innerText.includes("Charmander fighting ready"),
   };
 });

@@ -523,25 +523,25 @@ export function CanvasEditor() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f9fc] text-slate-950">
-      <div className="grid min-h-screen grid-cols-[320px_minmax(0,1fr)] max-[980px]:grid-cols-1">
-        <aside className="border-r border-slate-200 bg-white p-4 max-[980px]:border-b max-[980px]:border-r-0">
-          <div className="mb-4 flex items-center justify-between gap-3">
+    <main className="fixed inset-0 overflow-hidden bg-[#f7f9fc] text-slate-950 overscroll-none">
+      <div className="grid h-[100dvh] min-h-0 grid-cols-[280px_minmax(0,1fr)] max-[720px]:grid-cols-1 max-[720px]:grid-rows-[auto_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col overflow-hidden border-r border-slate-200 bg-white p-3 max-[720px]:max-h-[46dvh] max-[720px]:border-b max-[720px]:border-r-0">
+          <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-black">Canvas Camp</h1>
-              <p className="text-sm font-bold text-slate-500">
+              <h1 className="text-xl font-black">Canvas Camp</h1>
+              <p className="text-xs font-bold text-slate-500">
                 {POKEMON_COUNT} Pokemon coloring tree
               </p>
             </div>
-            <span className="grid size-11 place-items-center rounded-lg bg-slate-950 text-white">
-              <PaintBucket aria-hidden="true" size={21} />
+            <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-slate-950 text-white">
+              <PaintBucket aria-hidden="true" size={20} />
             </span>
           </div>
 
-          <label className="mb-4 grid gap-2 text-xs font-black uppercase text-slate-500">
+          <label className="mb-3 grid shrink-0 gap-2 text-xs font-black uppercase text-slate-500">
             Model
             <select
-              className="h-11 rounded-lg border-2 border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none transition focus:border-slate-950"
+              className="h-10 rounded-lg border-2 border-slate-200 bg-white px-3 text-xs font-black text-slate-950 outline-none transition focus:border-slate-950"
               value={model}
               onChange={(event) => setModel(event.target.value)}
             >
@@ -553,13 +553,13 @@ export function CanvasEditor() {
             </select>
           </label>
 
-          <div className="mb-4 grid gap-2">
+          <div className="mb-3 grid shrink-0 gap-2">
             <p className="text-xs font-black uppercase text-slate-500">Pose</p>
             <div className="grid grid-cols-2 gap-2">
               {POSE_OPTIONS.map((pose) => (
                 <button
                   key={pose.id}
-                  className={`h-10 rounded-lg border-2 px-3 text-sm font-black transition ${
+                  className={`h-10 rounded-lg border-2 px-2 text-sm font-black transition ${
                     selectedPose === pose.id
                       ? "border-slate-950 bg-slate-950 text-white"
                       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
@@ -579,7 +579,8 @@ export function CanvasEditor() {
             </div>
           </div>
 
-          <div className="grid gap-2">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+            <div className="grid gap-2 pb-3">
             {POKEMON_TYPE_GROUPS.map((group) => (
               <section key={group.id} className="rounded-lg border border-slate-200">
                 <button
@@ -621,17 +622,18 @@ export function CanvasEditor() {
                 ) : null}
               </section>
             ))}
+            </div>
           </div>
         </aside>
 
-        <section className="flex min-h-screen flex-col">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3">
-            <div>
+        <section className="flex h-[100dvh] min-h-0 flex-col overflow-hidden max-[720px]:h-full">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2">
+            <div className="min-w-32">
               <p className="text-xs font-black uppercase text-slate-500">
                 {selectedPokemon.type}
               </p>
-              <h2 className="text-xl font-black">{selectedPokemon.name}</h2>
-              <p className="text-sm font-bold text-slate-500">
+              <h2 className="text-lg font-black leading-tight">{selectedPokemon.name}</h2>
+              <p className="text-xs font-bold text-slate-500">
                 {POSE_OPTIONS.find((pose) => pose.id === selectedPose)?.label}
               </p>
             </div>
@@ -641,7 +643,7 @@ export function CanvasEditor() {
                 <button
                   key={swatch}
                   aria-label={`Use color ${swatch}`}
-                  className={`size-9 rounded-lg border-2 ${
+                  className={`size-10 rounded-lg border-2 ${
                     fillColor === swatch ? "border-slate-950" : "border-white"
                   } shadow-sm ring-1 ring-slate-200`}
                   style={{ backgroundColor: swatch }}
@@ -651,14 +653,14 @@ export function CanvasEditor() {
               ))}
               <input
                 aria-label="Custom color"
-                className="size-10 rounded-lg border-2 border-slate-200 bg-white p-1"
+                className="size-11 rounded-lg border-2 border-slate-200 bg-white p-1"
                 type="color"
                 value={fillColor}
                 onChange={(event) => setFillColor(event.target.value)}
               />
               <button
                 aria-label="Undo"
-                className="grid size-10 place-items-center rounded-lg border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
+                className="grid size-11 place-items-center rounded-lg border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
                 disabled={!canUndo}
                 type="button"
                 onClick={undoFill}
@@ -667,7 +669,7 @@ export function CanvasEditor() {
               </button>
               <button
                 aria-label="Clear colors"
-                className="grid size-10 place-items-center rounded-lg border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
+                className="grid size-11 place-items-center rounded-lg border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
                 disabled={!imageUrl}
                 type="button"
                 onClick={clearColors}
@@ -676,7 +678,7 @@ export function CanvasEditor() {
               </button>
               <button
                 aria-label="Generate image"
-                className="flex h-10 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-40"
+                className="flex h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-40"
                 disabled={isGenerating}
                 type="button"
                 onClick={() => void generateColoringPagePng(selectedPokemon.name)}
@@ -690,7 +692,7 @@ export function CanvasEditor() {
               </button>
               <button
                 aria-label="Download PNG"
-                className="grid size-10 place-items-center rounded-lg bg-slate-950 text-white disabled:opacity-40"
+                className="grid size-11 place-items-center rounded-lg bg-slate-950 text-white disabled:opacity-40"
                 disabled={!imageUrl}
                 type="button"
                 onClick={downloadColoringPage}
@@ -700,8 +702,13 @@ export function CanvasEditor() {
             </div>
           </div>
 
-          <div className="flex flex-1 items-center justify-center p-5">
-            <div className="w-full max-w-[min(76vh,900px)]">
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3">
+            <div
+              className="w-full"
+              style={{
+                maxWidth: "min(100%, calc(100dvh - 150px), 860px)",
+              }}
+            >
               <div className="relative aspect-square overflow-hidden rounded-lg border-2 border-slate-950 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
                 <canvas
                   ref={maskCanvasRef}
@@ -750,8 +757,8 @@ export function CanvasEditor() {
                   </div>
                 ) : null}
               </div>
-              <div className="mt-3 flex items-center justify-between gap-3 text-sm font-black text-slate-500">
-                <span>{status}</span>
+              <div className="mt-2 flex items-center justify-between gap-3 text-xs font-black text-slate-500">
+                <span className="truncate">{status}</span>
                 <span className="font-mono">{CANVAS_SIZE} PNG</span>
               </div>
             </div>
