@@ -87,7 +87,7 @@ const after = await page.evaluate(() => ({
       text.textContent?.trim().startsWith("Kinder"),
     ) &&
     Array.from(document.querySelectorAll("svg text")).some(
-      (text) => text.textContent?.trim() === "HP 60",
+      (text) => text.textContent?.trim() === "HP 000060",
     ),
   shapeButtonsRemoved: !document.body.innerText.includes("Box"),
   svgGroupCount: document.querySelectorAll("svg g").length,
