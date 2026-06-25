@@ -44,20 +44,39 @@ const mockImageUrl = `data:image/svg+xml;base64,${Buffer.from(outlineSvg).toStri
 const generationRequests = [];
 
 await page.route("**/api/coloring-page", async (route) => {
+  if (route.request().method() === "GET") {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        images: [],
+      }),
+    });
+    return;
+  }
+
   generationRequests.push(route.request().postDataJSON());
 
   await route.fulfill({
     contentType: "application/json",
     body: JSON.stringify({
+      image: {
+        downloadUrl: mockImageUrl,
+        pathname: "generated-coloring-pages/charmander/fighting/mock.png",
+        renderUrl: mockImageUrl,
+        source: "local",
+        uploadedAt: new Date().toISOString(),
+        url: mockImageUrl,
+      },
       imageUrl: mockImageUrl,
-      model: "google/gemini-2.5-flash-image",
+      model: "google/gemini-2.5-flash-lite",
       pokemonName: "Charmander",
+      pose: "fighting",
     }),
   });
 });
 
 await page.goto(url, { timeout: 30000, waitUntil: "networkidle" });
-await page.waitForSelector("text=Canvas Camp", { timeout: 10000 });
+await page.waitForSelector("text=Pokemon Camp", { timeout: 10000 });
 
 const before = await page.evaluate(() => ({
   bodyState: document.body.innerText.trim().length > 0 ? "HAS_CONTENT" : "BLANK",
@@ -116,9 +135,7 @@ const after = await page.evaluate(() => {
 
   return {
     hasFiftyTree: document.body.innerText.includes("50 Pokemon coloring tree"),
-    hasModelSwitcher: Array.from(document.querySelectorAll("select")).some(
-      (select) => select.value === "google/gemini-2.5-flash-image",
-    ),
+    hasNoModelSwitcher: document.querySelectorAll("select").length === 0,
     hasUndoButton: Boolean(document.querySelector('button[aria-label="Undo"]')),
     hasDownloadButton: Boolean(
       document.querySelector('button[aria-label="Download PNG"]'),
