@@ -93,6 +93,24 @@ function hexToRgba(fillColor: string) {
   };
 }
 
+async function readGenerateResponse(response: Response): Promise<GenerateResponse> {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return {
+      error: `Server returned an empty response (${response.status}).`,
+    };
+  }
+
+  try {
+    return JSON.parse(text) as GenerateResponse;
+  } catch {
+    return {
+      error: text.slice(0, 240) || "Server returned a non-JSON response.",
+    };
+  }
+}
+
 export function CanvasEditor() {
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -150,7 +168,7 @@ export function CanvasEditor() {
           model,
         }),
       });
-      const result = (await response.json()) as GenerateResponse;
+      const result = await readGenerateResponse(response);
 
       if (!response.ok || !result.imageUrl) {
         throw new Error(result.error || "Could not generate the PNG.");
