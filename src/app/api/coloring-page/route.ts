@@ -1,4 +1,5 @@
 import {
+  getGeneratedImageStorageError,
   listGeneratedImages,
   saveGeneratedImage,
 } from "@/lib/generated-images";
@@ -169,6 +170,12 @@ export async function POST(request: Request) {
 
     if (!validatePokemon(pokemonName)) {
       return jsonError("Choose a supported Pokemon.", 400);
+    }
+
+    const storageError = getGeneratedImageStorageError();
+
+    if (storageError) {
+      return jsonError(storageError);
     }
 
     const headers = {

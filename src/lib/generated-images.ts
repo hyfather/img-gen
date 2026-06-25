@@ -34,6 +34,22 @@ function hasBlobConfig() {
   );
 }
 
+function isVercelRuntime() {
+  return process.env.VERCEL === "1";
+}
+
+function shouldUseBlobStore() {
+  return isVercelRuntime() || hasBlobConfig();
+}
+
+export function getGeneratedImageStorageError() {
+  if (isVercelRuntime() && !hasBlobConfig()) {
+    return "Vercel Blob is not configured. Add BLOB_READ_WRITE_TOKEN, or enable Blob OIDC with BLOB_STORE_ID and VERCEL_OIDC_TOKEN.";
+  }
+
+  return "";
+}
+
 function generatedPrefix(pokemonName: string, pose: string) {
   return `${GENERATED_DIR}/${slugify(pokemonName)}/${pose}/`;
 }
@@ -158,8 +174,12 @@ export async function listGeneratedImages(
   pokemonName: string,
   pose: string,
 ): Promise<GeneratedImage[]> {
-  if (!hasBlobConfig()) {
+  if (!shouldUseBlobStore()) {
     return listLocalGeneratedImages(pokemonName, pose);
+  }
+
+  if (getGeneratedImageStorageError()) {
+    return [];
   }
 
   const result = await list({
@@ -181,7 +201,13 @@ export async function listGeneratedImages(
 export async function saveGeneratedImage(
   options: SaveGeneratedImageOptions,
 ): Promise<GeneratedImage> {
-  if (!hasBlobConfig()) {
+  const storageError = getGeneratedImageStorageError();
+
+  if (storageError) {
+    throw new Error(storageError);
+  }
+
+  if (!shouldUseBlobStore()) {
     return saveGeneratedImageLocally(options);
   }
 
