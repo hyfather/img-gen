@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# generated coloring pages
+/public/generated-coloring-pages/
+
 # next.js
 /.next/
 /out/

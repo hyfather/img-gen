@@ -22,6 +22,33 @@ page.on("pageerror", (error) => {
   consoleErrors.push(error.message);
 });
 
+const outlineSvg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+    <rect width="1024" height="1024" fill="white"/>
+    <circle cx="512" cy="512" r="280" fill="white" stroke="black" stroke-width="32"/>
+    <circle cx="412" cy="430" r="32" fill="black"/>
+    <circle cx="612" cy="430" r="32" fill="black"/>
+    <path d="M420 620 Q512 700 604 620" fill="none" stroke="black" stroke-width="28" stroke-linecap="round"/>
+  </svg>
+`;
+const mockImageUrl = `data:image/svg+xml;base64,${Buffer.from(outlineSvg).toString(
+  "base64",
+)}`;
+const generationRequests = [];
+
+await page.route("**/api/coloring-page", async (route) => {
+  generationRequests.push(route.request().postDataJSON());
+
+  await route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({
+      imageUrl: mockImageUrl,
+      model: "google/gemini-2.5-flash-image",
+      pokemonName: "Charmander",
+    }),
+  });
+});
+
 await page.goto(url, { timeout: 30000, waitUntil: "networkidle" });
 await page.waitForSelector("text=Canvas Camp", { timeout: 10000 });
 
@@ -36,63 +63,44 @@ const before = await page.evaluate(() => ({
     .map((button) => button.textContent?.trim())
     .filter(Boolean)
     .slice(0, 24),
-  inputCount: document.querySelectorAll("input").length,
-  svgCount: document.querySelectorAll("svg").length,
+  canvasCount: document.querySelectorAll("canvas").length,
   title: document.title,
 }));
 
-await page.getByRole("button", { name: "Backgrounds" }).click();
-await page.getByRole("button", { name: /Meadow Stage/i }).click();
-await page.getByRole("button", { name: "Pokemon" }).click();
 await page.getByRole("button", { name: /Fire/i }).click();
-await page.waitForSelector("text=Charizard", { timeout: 5000 });
-const charizardAvailable = await page.getByText("Charizard").isVisible();
-await page.getByRole("button", { name: /Grass/i }).click();
-await page.waitForSelector("text=Bulbasaur", { timeout: 5000 });
-const bulbasaurAvailable = await page.getByText("Bulbasaur").isVisible();
-await page.getByRole("button", { name: /Electric/i }).click();
-const pikachuAvailable = await page.getByText("Pikachu").isVisible();
-const topThreeAvailable =
-  pikachuAvailable && charizardAvailable && bulbasaurAvailable;
-await page.getByRole("button", { name: /Pikachu.*Add/i }).click();
-await page.getByRole("button", { name: "Close settings" }).click();
-await page.getByRole("button", { name: "Open settings" }).click();
-await page.getByLabel("Name").fill("Kinder Card");
-await page.getByRole("button", { name: /Outline/i }).click();
+await page.getByRole("button", { name: /Charmander/i }).click();
+const requestsAfterSelection = generationRequests.length;
+await page.getByRole("button", { name: "Fighting", exact: true }).click();
+const requestsAfterPose = generationRequests.length;
+await page.getByRole("button", { name: "Generate image" }).click();
+await page.waitForSelector("text=Charmander fighting ready", { timeout: 5000 });
+await page.getByLabel("Pokemon coloring canvas").click({
+  position: { x: 512, y: 512 },
+});
 
-const after = await page.evaluate(() => ({
-  backgroundImageCount: document.querySelectorAll("svg image").length,
-  cardText: Array.from(document.querySelectorAll("svg text")).map((text) =>
-    text.textContent?.trim(),
-  ),
-  inputValues: Array.from(document.querySelectorAll("input"))
-    .map((input) => input.value)
-    .slice(0, 8),
-  nameInputEdited: Array.from(document.querySelectorAll("input")).some(
-    (input) => input.value === "Kinder Card",
-  ),
-  panelSettingsButtonPresent: Array.from(document.querySelectorAll("button")).some(
-    (button) => button.textContent?.trim() === "Close settings",
-  ),
-  outlineOff: Array.from(document.querySelectorAll("button")).some(
-    (button) => button.textContent?.trim() === "OutlineOff",
-  ),
-  simplifiedCard:
-    !Array.from(document.querySelectorAll("svg text")).some((text) =>
-      ["Thunderbolt", "Electric type"].includes(
-        text.textContent?.trim() ?? "",
-      ),
-    ) &&
-    Array.from(document.querySelectorAll("svg text")).some((text) =>
-      text.textContent?.trim().startsWith("Kinder"),
-    ) &&
-    Array.from(document.querySelectorAll("svg text")).some(
-      (text) => text.textContent?.trim() === "HP 000060",
+const after = await page.evaluate(() => {
+  const canvases = Array.from(document.querySelectorAll("canvas"));
+  const colorCanvas = canvases[1];
+  const context = colorCanvas?.getContext("2d");
+  const pixel = context?.getImageData(512, 512, 1, 1).data;
+
+  return {
+    hasFiftyTree: document.body.innerText.includes("50 Pokemon coloring tree"),
+    hasModelSwitcher: Array.from(document.querySelectorAll("select")).some(
+      (select) => select.value === "google/gemini-2.5-flash-image",
     ),
-  shapeButtonsRemoved: !document.body.innerText.includes("Box"),
-  svgGroupCount: document.querySelectorAll("svg g").length,
-}));
-after.topThreeAvailable = topThreeAvailable;
+    hasUndoButton: Boolean(document.querySelector('button[aria-label="Undo"]')),
+    hasDownloadButton: Boolean(
+      document.querySelector('button[aria-label="Download PNG"]'),
+    ),
+    hasPosePicker: document.body.innerText.includes("Fighting"),
+    fillPixel: pixel ? Array.from(pixel) : [],
+    statusReady: document.body.innerText.includes("Charmander fighting ready"),
+  };
+});
+after.generationRequests = generationRequests;
+after.requestsAfterSelection = requestsAfterSelection;
+after.requestsAfterPose = requestsAfterPose;
 
 const screenshot = await page.screenshot({ fullPage: true });
 await writeFile(screenshotPath, screenshot);

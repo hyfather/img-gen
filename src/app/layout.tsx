@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Canvas Camp",
-  description: "A playful high-resolution image canvas for Pokemon-style cards.",
+  description: "A playful Pokemon coloring app powered by generated PNG outlines.",
 };
 
 export const viewport: Viewport = {

@@ -1,20 +1,31 @@
 # Canvas Camp
 
-A Vercel-ready Next.js image canvas for making high-resolution, Pokemon-style card scenes with kid-friendly controls.
+A Vercel-ready Next.js coloring app that generates Pokemon outline PNGs with OpenRouter image models and makes them fillable with layered HTML canvas.
 
 ## What is included
 
-- Floating object tray over a 1920 x 1080 dotted-grid canvas
-- Pokemon object templates grouped by type
-- PNG backgrounds loaded from `public/backgrounds`
-- Selection, drag, resize, rotate, duplicate, delete, and layer controls
-- Per-card settings menu with editable name, HP, type, move, color, and outline
-- PNG export at 1x, 2x, or 4x resolution
-- Playwright smoke test for page load and basic add/edit behavior
+- A 50-Pokemon category tree grouped by Pokemon type
+- A staged workflow: choose Pokemon, choose pose, then generate
+- OpenRouter image generation through `google/gemini-2.5-flash-image` by default
+- Generated PNG assets written to `public/generated-coloring-pages`
+- Layered canvas coloring with mask, fill, and outline canvases
+- Flood fill bounded by dark anti-aliased outline pixels
+- Color swatches, custom color picker, undo, clear, regenerate, and PNG export
+- Playwright smoke test with a mocked image-generation route
 
-## Backgrounds
+## Environment
 
-Add PNG files to `public/backgrounds`. The app lists every `.png` in that folder as a selectable canvas background.
+Create a local env file with an OpenRouter key:
+
+```bash
+OPENROUTER_API_KEY=...
+```
+
+You can swap the image model without code changes:
+
+```bash
+OPENROUTER_IMAGE_MODEL=google/gemini-3-pro-image-preview
+```
 
 ## Run locally
 
