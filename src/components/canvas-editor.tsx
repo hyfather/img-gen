@@ -33,6 +33,13 @@ type PoseOption = {
   label: string;
 };
 
+type PaintOption = {
+  id: string;
+  label: string;
+  color: string;
+  kind?: "solid" | "premium-gold" | "premium-silver";
+};
+
 const CANVAS_SIZE = 1024;
 const OUTLINE_DILATION_RADIUS = 2;
 const TAP_SEARCH_RADIUS = 12;
@@ -41,17 +48,65 @@ const MODEL_OPTIONS = [
   "google/gemini-2.5-flash-image",
   "google/gemini-3-pro-image-preview",
 ];
-const SWATCHES = [
-  "#fef08a",
-  "#fb923c",
-  "#38bdf8",
-  "#22c55e",
-  "#f472b6",
-  "#a78bfa",
-  "#f87171",
-  "#94a3b8",
-  "#ffffff",
+const COLOR_PALETTES: { label: string; colors: PaintOption[] }[] = [
+  {
+    label: "Pokemon brights",
+    colors: [
+      { id: "pika-yellow", label: "Pika yellow", color: "#facc15" },
+      { id: "ember-orange", label: "Ember orange", color: "#fb923c" },
+      { id: "charmander-red", label: "Charmander red", color: "#ef4444" },
+      { id: "squirtle-blue", label: "Squirtle blue", color: "#38bdf8" },
+      { id: "bulba-green", label: "Bulba green", color: "#22c55e" },
+      { id: "jiggly-pink", label: "Jiggly pink", color: "#f9a8d4" },
+      { id: "psychic-violet", label: "Psychic violet", color: "#a78bfa" },
+      { id: "ghost-purple", label: "Ghost purple", color: "#7c3aed" },
+    ],
+  },
+  {
+    label: "Nature tones",
+    colors: [
+      { id: "leaf-sprout", label: "Leaf sprout", color: "#84cc16" },
+      { id: "moss", label: "Moss", color: "#4d7c0f" },
+      { id: "sky", label: "Sky", color: "#7dd3fc" },
+      { id: "deep-sea", label: "Deep sea", color: "#2563eb" },
+      { id: "sand", label: "Sand", color: "#fcd34d" },
+      { id: "earth", label: "Earth", color: "#92400e" },
+      { id: "stone", label: "Stone", color: "#94a3b8" },
+      { id: "night", label: "Night", color: "#1e293b" },
+    ],
+  },
+  {
+    label: "Soft accents",
+    colors: [
+      { id: "cream", label: "Cream", color: "#fff7ed" },
+      { id: "blush", label: "Blush", color: "#fecdd3" },
+      { id: "peach", label: "Peach", color: "#fed7aa" },
+      { id: "mint", label: "Mint", color: "#bbf7d0" },
+      { id: "aqua", label: "Aqua", color: "#a5f3fc" },
+      { id: "lavender", label: "Lavender", color: "#ddd6fe" },
+      { id: "white", label: "Paper white", color: "#ffffff" },
+      { id: "ink", label: "Ink black", color: "#111827" },
+    ],
+  },
+  {
+    label: "Premium sheens",
+    colors: [
+      {
+        id: "premium-gold",
+        label: "Rare card gold",
+        color: "#f6c453",
+        kind: "premium-gold",
+      },
+      {
+        id: "premium-silver",
+        label: "Shiny silver",
+        color: "#d8dee9",
+        kind: "premium-silver",
+      },
+    ],
+  },
 ];
+const DEFAULT_PAINT = COLOR_PALETTES[0].colors[0];
 const POSE_OPTIONS: PoseOption[] = [
   { id: "standing", label: "Standing" },
   { id: "sitting", label: "Sitting" },
@@ -93,6 +148,37 @@ function hexToRgba(fillColor: string) {
   };
 }
 
+function getPaintRgba(paint: PaintOption, x: number, y: number) {
+  if (paint.kind === "premium-gold" || paint.kind === "premium-silver") {
+    const base =
+      paint.kind === "premium-gold"
+        ? { r: 214, g: 151, b: 34 }
+        : { r: 162, g: 174, b: 190 };
+    const highlight =
+      paint.kind === "premium-gold"
+        ? { r: 255, g: 244, b: 174 }
+        : { r: 255, g: 255, b: 255 };
+    const shadow =
+      paint.kind === "premium-gold"
+        ? { r: 140, g: 92, b: 18 }
+        : { r: 96, g: 111, b: 131 };
+    const shimmer =
+      (Math.sin((x + y) / 18) + Math.sin((x - y) / 37) + 2) / 4;
+    const sparkle = (x + y) % 97 < 5 ? 0.34 : 0;
+    const mix = Math.min(1, shimmer * 0.74 + sparkle);
+    const low = shimmer < 0.28 ? shadow : base;
+
+    return {
+      r: Math.round(low.r + (highlight.r - low.r) * mix),
+      g: Math.round(low.g + (highlight.g - low.g) * mix),
+      b: Math.round(low.b + (highlight.b - low.b) * mix),
+      a: 255,
+    };
+  }
+
+  return hexToRgba(paint.color);
+}
+
 async function readGenerateResponse(response: Response): Promise<GenerateResponse> {
   const text = await response.text();
 
@@ -121,7 +207,8 @@ export function CanvasEditor() {
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonOption>(
     POKEMON_TYPE_GROUPS[0].pokemon[0],
   );
-  const [fillColor, setFillColor] = useState(SWATCHES[0]);
+  const [selectedPaint, setSelectedPaint] = useState<PaintOption>(DEFAULT_PAINT);
+  const [customColor, setCustomColor] = useState("#facc15");
   const [selectedPose, setSelectedPose] = useState(POSE_OPTIONS[0].id);
   const [imageUrl, setImageUrl] = useState("");
   const [model, setModel] = useState(DEFAULT_MODEL);
@@ -361,7 +448,7 @@ export function CanvasEditor() {
   }
 
   const floodFill = useCallback(
-    (startX: number, startY: number, nextFillColor: string) => {
+    (startX: number, startY: number, nextPaint: PaintOption) => {
       const maskCanvas = maskCanvasRef.current;
       const colorCanvas = colorCanvasRef.current;
       const boundaryMask = boundaryMaskRef.current;
@@ -397,7 +484,6 @@ export function CanvasEditor() {
       undoStackRef.current.push(colorImage);
       setCanUndo(true);
 
-      const fill = hexToRgba(nextFillColor);
       const visited = new Uint8Array(CANVAS_SIZE * CANVAS_SIZE);
       const stack = new Int32Array(CANVAS_SIZE * CANVAS_SIZE);
       let stackLength = 1;
@@ -413,12 +499,14 @@ export function CanvasEditor() {
           continue;
         }
 
+        const x = pixelIndex % CANVAS_SIZE;
+        const y = Math.floor(pixelIndex / CANVAS_SIZE);
+        const fill = getPaintRgba(nextPaint, x, y);
+
         colorImage.data[dataIndex] = fill.r;
         colorImage.data[dataIndex + 1] = fill.g;
         colorImage.data[dataIndex + 2] = fill.b;
         colorImage.data[dataIndex + 3] = fill.a;
-
-        const x = pixelIndex % CANVAS_SIZE;
         const left = pixelIndex - 1;
         const right = pixelIndex + 1;
         const up = pixelIndex - CANVAS_SIZE;
@@ -458,7 +546,7 @@ export function CanvasEditor() {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = getCanvasPoint(event);
-    floodFill(point.x, point.y, fillColor);
+    floodFill(point.x, point.y, selectedPaint);
   }
 
   function undoFill() {
@@ -639,24 +727,53 @@ export function CanvasEditor() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {SWATCHES.map((swatch) => (
-                <button
-                  key={swatch}
-                  aria-label={`Use color ${swatch}`}
-                  className={`size-10 rounded-lg border-2 ${
-                    fillColor === swatch ? "border-slate-950" : "border-white"
-                  } shadow-sm ring-1 ring-slate-200`}
-                  style={{ backgroundColor: swatch }}
-                  type="button"
-                  onClick={() => setFillColor(swatch)}
-                />
-              ))}
+              <div className="grid max-w-[520px] grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2 max-[980px]:max-w-full">
+                {COLOR_PALETTES.map((palette) => (
+                  <div key={palette.label} className="grid gap-1">
+                    <p className="px-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                      {palette.label}
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {palette.colors.map((paint) => (
+                        <button
+                          key={paint.id}
+                          aria-label={`Use ${paint.label}`}
+                          title={paint.label}
+                          className={`size-8 rounded-lg border-2 transition hover:scale-105 ${
+                            selectedPaint.id === paint.id
+                              ? "border-slate-950"
+                              : "border-white"
+                          } shadow-sm ring-1 ring-slate-200`}
+                          style={{
+                            background:
+                              paint.kind === "premium-gold"
+                                ? "linear-gradient(135deg, #8c5c12 0%, #f6c453 34%, #fff4ae 50%, #c9871e 68%, #fff0a3 100%)"
+                                : paint.kind === "premium-silver"
+                                  ? "linear-gradient(135deg, #607083 0%, #d8dee9 32%, #ffffff 50%, #9aa6b2 68%, #f8fafc 100%)"
+                                  : paint.color,
+                          }}
+                          type="button"
+                          onClick={() => setSelectedPaint(paint)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
               <input
                 aria-label="Custom color"
                 className="size-11 rounded-lg border-2 border-slate-200 bg-white p-1"
                 type="color"
-                value={fillColor}
-                onChange={(event) => setFillColor(event.target.value)}
+                value={customColor}
+                onChange={(event) => {
+                  const nextColor = event.target.value;
+                  setCustomColor(nextColor);
+                  setSelectedPaint({
+                    id: `custom-${nextColor}`,
+                    label: "Custom color",
+                    color: nextColor,
+                  });
+                }}
               />
               <button
                 aria-label="Undo"
