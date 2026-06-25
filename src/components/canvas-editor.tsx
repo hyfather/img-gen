@@ -212,12 +212,16 @@ function shortText(value: string, max = 15) {
 
 function cardTitleText(label: string, width: number, fontSize: number) {
   const maxCharacters = clamp(
-    Math.floor((width * 0.52) / (fontSize * 0.55)),
+    Math.floor((width * 0.42) / (fontSize * 0.55)),
     5,
     14,
   );
 
   return shortText(label, maxCharacters);
+}
+
+function formatHp(hp: number) {
+  return hp.toString().padStart(6, "0");
 }
 
 function escapeXml(value: string) {
@@ -472,7 +476,7 @@ function pokemonCardSvg(item: CanvasItem) {
   const hpSize = clamp(width * 0.075, 12, 22);
   const bodySize = clamp(width * 0.075, 11, 21);
   const radius = Math.min(8, width * 0.04);
-  const hpText = `HP ${item.hp}`;
+  const hpText = `HP ${formatHp(item.hp)}`;
   const hpX = item.showOutline ? x + width * 0.78 : x + width * 0.08;
   const hpY = item.showOutline ? y + height * 0.103 : y + height * 0.16;
   const typeX = item.showOutline
@@ -1610,8 +1614,8 @@ export function CanvasEditor({
             <div className="grid grid-cols-[1fr_1.3fr] gap-2">
               <NumberField
                 label="HP"
-                max={999}
-                min={10}
+                max={999999}
+                min={0}
                 value={selectedItem.hp}
                 onChange={(value) => updateItem(selectedItem.id, { hp: value })}
               />
@@ -1793,7 +1797,7 @@ function PokemonCard({ item }: { item: CanvasItem }) {
   const artWidth = item.width * 0.74;
   const artHeight = imageHeight * 0.9;
   const radius = Math.min(8, item.width * 0.04);
-  const hpText = `HP ${item.hp}`;
+  const hpText = `HP ${formatHp(item.hp)}`;
   const hpX = item.showOutline
     ? item.x + item.width * 0.78
     : item.x + item.width * 0.08;
