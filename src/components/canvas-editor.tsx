@@ -9,18 +9,18 @@ import {
   Sparkles,
   Undo2,
 } from "lucide-react";
-import { PointerEvent as ReactPointerEvent, useCallback, useRef, useState } from "react";
+import {
+  PointerEvent as ReactPointerEvent,
+  useCallback,
+  useRef,
+  useState,
+} from "react";
 import {
   POKEMON_COUNT,
   POKEMON_TYPE_GROUPS,
   type PokemonOption,
   type PokemonType,
 } from "@/lib/pokemon";
-
-type CanvasPoint = {
-  x: number;
-  y: number;
-};
 
 type GenerateResponse = {
   imageUrl?: string;
@@ -34,6 +34,8 @@ type PoseOption = {
 };
 
 const CANVAS_SIZE = 1024;
+const OUTLINE_DILATION_RADIUS = 2;
+const TAP_SEARCH_RADIUS = 12;
 const DEFAULT_MODEL = "google/gemini-2.5-flash-image";
 const MODEL_OPTIONS = [
   "google/gemini-2.5-flash-image",
@@ -95,6 +97,7 @@ export function CanvasEditor() {
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
   const lineCanvasRef = useRef<HTMLCanvasElement>(null);
+  const boundaryMaskRef = useRef<Uint8Array | null>(null);
   const undoStackRef = useRef<ImageData[]>([]);
   const [activeType, setActiveType] = useState<PokemonType>("electric");
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonOption>(
@@ -122,6 +125,7 @@ export function CanvasEditor() {
     }
 
     undoStackRef.current = [];
+    boundaryMaskRef.current = null;
     setCanUndo(false);
     setImageUrl("");
   }
@@ -203,7 +207,35 @@ export function CanvasEditor() {
     maskContext.fillStyle = "#ffffff";
     maskContext.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     maskContext.drawImage(image, x, y, width, height);
-    lineContext.drawImage(image, x, y, width, height);
+
+    const originalImage = maskContext.getImageData(
+      0,
+      0,
+      CANVAS_SIZE,
+      CANVAS_SIZE,
+    );
+    const outlineImage = lineContext.createImageData(CANVAS_SIZE, CANVAS_SIZE);
+    const rawBoundaryMask = new Uint8Array(CANVAS_SIZE * CANVAS_SIZE);
+
+    for (let index = 0; index < originalImage.data.length; index += 4) {
+      const pixelIndex = index / 4;
+
+      if (isOutlinePixel(originalImage.data, index)) {
+        rawBoundaryMask[pixelIndex] = 1;
+        outlineImage.data[index] = 17;
+        outlineImage.data[index + 1] = 24;
+        outlineImage.data[index + 2] = 39;
+        outlineImage.data[index + 3] = originalImage.data[index + 3];
+      }
+    }
+
+    boundaryMaskRef.current = dilateBoundaryMask(
+      rawBoundaryMask,
+      CANVAS_SIZE,
+      CANVAS_SIZE,
+      OUTLINE_DILATION_RADIUS,
+    );
+    lineContext.putImageData(outlineImage, 0, 0);
     undoStackRef.current = [];
     setCanUndo(false);
   }
@@ -224,31 +256,107 @@ export function CanvasEditor() {
   }
 
   function isOutlinePixel(data: Uint8ClampedArray, index: number) {
+    const alpha = data[index + 3];
+    const luminance =
+      data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
+
     return (
-      data[index] < 120 &&
-      data[index + 1] < 120 &&
-      data[index + 2] < 120 &&
-      data[index + 3] > 20
+      alpha > 20 &&
+      ((data[index] < 145 && data[index + 1] < 145 && data[index + 2] < 145) ||
+        luminance < 165)
     );
+  }
+
+  function dilateBoundaryMask(
+    sourceMask: Uint8Array,
+    width: number,
+    height: number,
+    radius: number,
+  ) {
+    const nextMask = new Uint8Array(sourceMask);
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const index = y * width + x;
+
+        if (!sourceMask[index]) {
+          continue;
+        }
+
+        for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+          for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+            const nextX = x + offsetX;
+            const nextY = y + offsetY;
+
+            if (
+              nextX >= 0 &&
+              nextY >= 0 &&
+              nextX < width &&
+              nextY < height
+            ) {
+              nextMask[nextY * width + nextX] = 1;
+            }
+          }
+        }
+      }
+    }
+
+    return nextMask;
+  }
+
+  function findFillStartPoint(startX: number, startY: number, boundaryMask: Uint8Array) {
+    const clampedX = Math.round(Math.min(Math.max(startX, 0), CANVAS_SIZE - 1));
+    const clampedY = Math.round(Math.min(Math.max(startY, 0), CANVAS_SIZE - 1));
+    const startIndex = clampedY * CANVAS_SIZE + clampedX;
+
+    if (!boundaryMask[startIndex]) {
+      return startIndex;
+    }
+
+    for (let radius = 1; radius <= TAP_SEARCH_RADIUS; radius += 1) {
+      for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+        for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+          if (Math.abs(offsetX) !== radius && Math.abs(offsetY) !== radius) {
+            continue;
+          }
+
+          const nextX = clampedX + offsetX;
+          const nextY = clampedY + offsetY;
+
+          if (
+            nextX >= 0 &&
+            nextY >= 0 &&
+            nextX < CANVAS_SIZE &&
+            nextY < CANVAS_SIZE
+          ) {
+            const nextIndex = nextY * CANVAS_SIZE + nextX;
+
+            if (!boundaryMask[nextIndex]) {
+              return nextIndex;
+            }
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   const floodFill = useCallback(
     (startX: number, startY: number, nextFillColor: string) => {
       const maskCanvas = maskCanvasRef.current;
       const colorCanvas = colorCanvasRef.current;
+      const boundaryMask = boundaryMaskRef.current;
 
-      if (!maskCanvas || !colorCanvas || !imageUrl) {
+      if (!maskCanvas || !colorCanvas || !boundaryMask || !imageUrl) {
         return;
       }
 
-      const maskContext = maskCanvas.getContext("2d", {
-        willReadFrequently: true,
-      });
       const colorContext = colorCanvas.getContext("2d", {
         willReadFrequently: true,
       });
 
-      if (!maskContext || !colorContext) {
+      if (!colorContext) {
         return;
       }
 
@@ -261,11 +369,10 @@ export function CanvasEditor() {
         return;
       }
 
-      const maskImage = maskContext.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
       const colorImage = colorContext.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-      const startIndex = (startY * CANVAS_SIZE + startX) * 4;
+      const startPixelIndex = findFillStartPoint(startX, startY, boundaryMask);
 
-      if (isOutlinePixel(maskImage.data, startIndex)) {
+      if (startPixelIndex === null) {
         return;
       }
 
@@ -274,34 +381,17 @@ export function CanvasEditor() {
 
       const fill = hexToRgba(nextFillColor);
       const visited = new Uint8Array(CANVAS_SIZE * CANVAS_SIZE);
-      const stack: CanvasPoint[] = [{ x: startX, y: startY }];
+      const stack = new Int32Array(CANVAS_SIZE * CANVAS_SIZE);
+      let stackLength = 1;
+      stack[0] = startPixelIndex;
+      visited[startPixelIndex] = 1;
 
-      while (stack.length > 0) {
-        const point = stack.pop();
-
-        if (!point) {
-          continue;
-        }
-
-        if (
-          point.x < 0 ||
-          point.y < 0 ||
-          point.x >= CANVAS_SIZE ||
-          point.y >= CANVAS_SIZE
-        ) {
-          continue;
-        }
-
-        const pixelIndex = point.y * CANVAS_SIZE + point.x;
-
-        if (visited[pixelIndex]) {
-          continue;
-        }
-
-        visited[pixelIndex] = 1;
+      while (stackLength > 0) {
+        stackLength -= 1;
+        const pixelIndex = stack[stackLength];
         const dataIndex = pixelIndex * 4;
 
-        if (isOutlinePixel(maskImage.data, dataIndex)) {
+        if (boundaryMask[pixelIndex]) {
           continue;
         }
 
@@ -310,12 +400,35 @@ export function CanvasEditor() {
         colorImage.data[dataIndex + 2] = fill.b;
         colorImage.data[dataIndex + 3] = fill.a;
 
-        stack.push(
-          { x: point.x + 1, y: point.y },
-          { x: point.x - 1, y: point.y },
-          { x: point.x, y: point.y + 1 },
-          { x: point.x, y: point.y - 1 },
-        );
+        const x = pixelIndex % CANVAS_SIZE;
+        const left = pixelIndex - 1;
+        const right = pixelIndex + 1;
+        const up = pixelIndex - CANVAS_SIZE;
+        const down = pixelIndex + CANVAS_SIZE;
+
+        if (x > 0 && !visited[left] && !boundaryMask[left]) {
+          visited[left] = 1;
+          stack[stackLength] = left;
+          stackLength += 1;
+        }
+
+        if (x < CANVAS_SIZE - 1 && !visited[right] && !boundaryMask[right]) {
+          visited[right] = 1;
+          stack[stackLength] = right;
+          stackLength += 1;
+        }
+
+        if (up >= 0 && !visited[up] && !boundaryMask[up]) {
+          visited[up] = 1;
+          stack[stackLength] = up;
+          stackLength += 1;
+        }
+
+        if (down < visited.length && !visited[down] && !boundaryMask[down]) {
+          visited[down] = 1;
+          stack[stackLength] = down;
+          stackLength += 1;
+        }
       }
 
       colorContext.putImageData(colorImage, 0, 0);
@@ -324,6 +437,8 @@ export function CanvasEditor() {
   );
 
   function handleCanvasPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
     const point = getCanvasPoint(event);
     floodFill(point.x, point.y, fillColor);
   }

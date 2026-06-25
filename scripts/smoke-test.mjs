@@ -6,10 +6,13 @@ const screenshotPath =
   process.env.SMOKE_SCREENSHOT ?? "/tmp/canvas-camp-smoke.png";
 
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({
-  deviceScaleFactor: 1,
-  viewport: { width: 1440, height: 1000 },
+const context = await browser.newContext({
+  deviceScaleFactor: 2,
+  hasTouch: true,
+  isMobile: false,
+  viewport: { width: 1180, height: 820 },
 });
+const page = await context.newPage();
 const consoleErrors = [];
 
 page.on("console", (message) => {
@@ -74,15 +77,38 @@ await page.getByRole("button", { name: "Fighting", exact: true }).click();
 const requestsAfterPose = generationRequests.length;
 await page.getByRole("button", { name: "Generate image" }).click();
 await page.waitForSelector("text=Charmander fighting ready", { timeout: 5000 });
-await page.getByLabel("Pokemon coloring canvas").click({
-  position: { x: 512, y: 512 },
-});
+const canvasBox = await page.getByLabel("Pokemon coloring canvas").boundingBox();
+
+if (!canvasBox) {
+  throw new Error("Could not find coloring canvas bounds.");
+}
+
+await page.touchscreen.tap(
+  canvasBox.x + canvasBox.width / 2,
+  canvasBox.y + canvasBox.height / 2,
+);
 
 const after = await page.evaluate(() => {
   const canvases = Array.from(document.querySelectorAll("canvas"));
   const colorCanvas = canvases[1];
+  const lineCanvas = canvases[2];
   const context = colorCanvas?.getContext("2d");
+  const lineContext = lineCanvas?.getContext("2d");
   const pixel = context?.getImageData(512, 512, 1, 1).data;
+  const linePixel = lineContext?.getImageData(512, 512, 1, 1).data;
+  const compositeCanvas = document.createElement("canvas");
+  compositeCanvas.width = 1024;
+  compositeCanvas.height = 1024;
+  const compositeContext = compositeCanvas.getContext("2d");
+
+  if (compositeContext && colorCanvas && lineCanvas) {
+    compositeContext.fillStyle = "#ffffff";
+    compositeContext.fillRect(0, 0, 1024, 1024);
+    compositeContext.drawImage(colorCanvas, 0, 0);
+    compositeContext.drawImage(lineCanvas, 0, 0);
+  }
+
+  const compositePixel = compositeContext?.getImageData(512, 512, 1, 1).data;
 
   return {
     hasFiftyTree: document.body.innerText.includes("50 Pokemon coloring tree"),
@@ -95,6 +121,8 @@ const after = await page.evaluate(() => {
     ),
     hasPosePicker: document.body.innerText.includes("Fighting"),
     fillPixel: pixel ? Array.from(pixel) : [],
+    linePixel: linePixel ? Array.from(linePixel) : [],
+    compositePixel: compositePixel ? Array.from(compositePixel) : [],
     statusReady: document.body.innerText.includes("Charmander fighting ready"),
   };
 });
