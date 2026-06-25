@@ -417,6 +417,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const [resistance, setResistance] = useState("-30");
   const [retreatCost, setRetreatCost] = useState("★★");
   const [cardNumber, setCardNumber] = useState("179/132");
+  const [mintedCardUrl, setMintedCardUrl] = useState("");
+  const [isMintingCard, setIsMintingCard] = useState(false);
   const cardTypeStyle = TYPE_ICON_STYLES[cardType];
   const selectedPoseLabel =
     POSE_OPTIONS.find((pose) => pose.id === selectedPose)?.label ??
@@ -441,6 +443,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     setCanUndo(false);
     setImageUrl("");
     setCardImageUrl("");
+    setMintedCardUrl("");
   }
 
   const loadImageToCanvases = useCallback(async (nextImageUrl: string) => {
@@ -557,6 +560,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
           setImageUrl(images[0].renderUrl);
           setCardImageUrl("");
+          setMintedCardUrl("");
           setStatus(
             `Showing saved ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()}`,
           );
@@ -812,7 +816,145 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     }
 
     setCardImageUrl(composedImage);
+    setMintedCardUrl("");
     setStatus(`${selectedPokemon.name} placed on card`);
+  }
+
+  async function loadCardAsset(src: string) {
+    if (!src) {
+      return null;
+    }
+
+    try {
+      return await loadImage(src);
+    } catch {
+      return null;
+    }
+  }
+
+  async function composeCardPreview() {
+    if (!cardImageUrl) {
+      return "";
+    }
+
+    const cardWidth = 900;
+    const cardHeight = Math.round((cardWidth * 88) / 63);
+    const canvas = document.createElement("canvas");
+    canvas.width = cardWidth;
+    canvas.height = cardHeight;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return "";
+    }
+
+    const backgroundImage = await loadCardAsset(selectedBackground);
+    const pokemonImage = await loadCardAsset(cardImageUrl);
+    const borderWidth = 42;
+    const innerX = borderWidth;
+    const innerY = borderWidth;
+    const innerWidth = cardWidth - borderWidth * 2;
+    const innerHeight = cardHeight - borderWidth * 2;
+
+    context.fillStyle = cardBorderColor;
+    context.fillRect(0, 0, cardWidth, cardHeight);
+    context.fillStyle = "#111827";
+    context.fillRect(18, 18, cardWidth - 36, cardHeight - 36);
+    context.fillStyle = "#f8fafc";
+    context.fillRect(innerX, innerY, innerWidth, innerHeight);
+
+    if (backgroundImage) {
+      context.drawImage(backgroundImage, innerX, innerY, innerWidth, innerHeight);
+    } else {
+      const gradient = context.createLinearGradient(0, innerY, 0, innerY + innerHeight);
+      gradient.addColorStop(0, "#e0f2fe");
+      gradient.addColorStop(1, "#475569");
+      context.fillStyle = gradient;
+      context.fillRect(innerX, innerY, innerWidth, innerHeight);
+    }
+
+    context.fillStyle = "rgba(255,255,255,0.88)";
+    context.fillRect(innerX + 30, innerY + 30, innerWidth - 60, 142);
+    context.fillStyle = "#111827";
+    context.font = "800 58px Arial";
+    context.fillText(`${selectedPokemon.name}${isExCard ? " ex" : ""}`, innerX + 150, innerY + 98);
+    context.font = "800 24px Arial";
+    context.fillText(cardStage, innerX + 46, innerY + 62);
+    context.fillText(`Evolves from ${evolvesFrom || selectedPokemon.name}`, innerX + 152, innerY + 135);
+    context.font = "900 52px Arial";
+    context.fillText(`${cardHp} HP`, innerX + innerWidth - 230, innerY + 94);
+
+    if (pokemonImage) {
+      const pokemonHeight = innerHeight * 0.38;
+      const pokemonWidth = pokemonHeight * (pokemonImage.naturalWidth / pokemonImage.naturalHeight);
+      context.drawImage(
+        pokemonImage,
+        innerX + (innerWidth - pokemonWidth) / 2,
+        innerY + innerHeight * 0.22,
+        pokemonWidth,
+        pokemonHeight,
+      );
+    }
+
+    context.fillStyle = "rgba(15,23,42,0.72)";
+    context.fillRect(innerX + 42, innerY + innerHeight - 360, innerWidth - 84, 238);
+    context.fillStyle = "#ffffff";
+    context.font = "900 44px Arial";
+    context.fillText(`${attackOneName} ${attackOneDamage}`, innerX + 78, innerY + innerHeight - 288);
+    context.fillText(`${attackTwoName} ${attackTwoDamage}`, innerX + 78, innerY + innerHeight - 174);
+    context.font = "800 24px Arial";
+    context.fillText(`Weakness ${weakness}    Resistance ${resistance}    Retreat ${retreatCost}`, innerX + 78, innerY + innerHeight - 92);
+    context.fillText(`${cardNumber} ★`, innerX + innerWidth - 190, innerY + innerHeight - 28);
+
+    return canvas.toDataURL("image/png");
+  }
+
+  async function mintRealisticCard() {
+    setIsMintingCard(true);
+    setStatus("Minting realistic Pokemon card");
+
+    try {
+      const finalCardImage = await composeCardPreview();
+
+      if (!finalCardImage) {
+        throw new Error("Place your colored Pokemon on the card before minting.");
+      }
+
+      const response = await fetch("/api/mint-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          finalCardImage,
+          pokemonName: selectedPokemon.name,
+          cardType: TYPE_ICON_STYLES[cardType].label,
+          cardStage,
+          cardHp,
+          evolvesFrom,
+          isExCard,
+          attacks: [
+            { name: attackOneName, damage: attackOneDamage },
+            { name: attackTwoName, damage: attackTwoDamage },
+          ],
+          weakness,
+          resistance,
+          retreatCost,
+          cardNumber,
+          backgroundPrompt,
+        }),
+      });
+      const result = await readGenerateResponse(response);
+
+      if (!response.ok || !result.imageUrl) {
+        throw new Error(result.error || "Could not mint the realistic card.");
+      }
+
+      setMintedCardUrl(result.imageUrl);
+      setStatus(`${selectedPokemon.name} realistic card minted`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Card minting failed");
+    } finally {
+      setIsMintingCard(false);
+    }
   }
 
   async function generateBackground() {
@@ -1255,16 +1397,43 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-slate-200 bg-white p-3 max-[980px]:col-span-2 max-[980px]:border-l-0 max-[980px]:border-t max-[720px]:order-3 max-[720px]:col-span-1 max-[720px]:overflow-visible max-[720px]:rounded-[28px] max-[720px]:border max-[720px]:border-slate-200/80 max-[720px]:shadow-sm">
           <div>
             <h2 className="text-lg font-black">Pokemon card studio</h2>
-            <p className="text-xs font-bold text-slate-500">Place the colored Pokemon on a card, choose a scene, and tune battle details.</p>
+            <p className="text-sm font-bold leading-snug text-slate-500">Review the card, tune the details, then create a polished realistic render.</p>
           </div>
 
+          <div className="grid grid-cols-5 gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-2 text-[10px] font-black uppercase text-slate-500 max-[430px]:text-[9px]">
+            {["Pick", "Color", "Place", "Customize", "Mint"].map((step, index) => (
+              <div
+                key={step}
+                className={`rounded-xl px-2 py-2 text-center ${
+                  index === 4 ? "bg-lime-300 text-slate-950 shadow-sm" : "bg-white"
+                }`}
+              >
+                <span className="mb-1 block text-[11px] text-slate-400">{index + 1}</span>
+                {step}
+              </div>
+            ))}
+          </div>
+
+          {mintedCardUrl ? (
+            <div className="grid gap-2 rounded-2xl border border-lime-200 bg-lime-50 p-3 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-black uppercase text-lime-700">Minted realistic card</p>
+                <a className="rounded-full bg-white px-3 py-1 text-xs font-black text-lime-700 shadow-sm" href={mintedCardUrl} download>
+                  Download
+                </a>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img alt="Minted realistic Pokemon card" className="mx-auto max-h-[420px] w-auto rounded-xl border border-lime-200 shadow-sm" src={mintedCardUrl} />
+            </div>
+          ) : null}
+
           <div
-            className="mx-auto w-full max-w-[380px] rounded-[28px] p-2 shadow-[0_18px_40px_rgba(15,23,42,0.22)] max-[720px]:max-w-[min(100%,360px)]"
+            className="mx-auto w-full max-w-[320px] rounded-[24px] p-2 shadow-[0_18px_40px_rgba(15,23,42,0.18)] max-[720px]:max-w-[min(100%,330px)]"
             style={{ backgroundColor: cardBorderColor }}
           >
-            <div className="relative aspect-[63/88] overflow-hidden rounded-[22px] border-2 border-white/50 bg-slate-800 p-2">
-              <div className="absolute inset-1 rounded-[20px] border-4 border-slate-300/80" />
-              <div className="relative size-full overflow-hidden rounded-[18px] border-[3px] border-slate-950 bg-slate-100">
+            <div className="relative aspect-[63/88] overflow-hidden rounded-[20px] border-2 border-white/50 bg-slate-800 p-2">
+              <div className="absolute inset-1 rounded-[18px] border-4 border-slate-300/80" />
+              <div className="relative size-full overflow-hidden rounded-[16px] border-[3px] border-slate-950 bg-slate-100">
                 {selectedBackground ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1278,13 +1447,13 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                 <div className="absolute -right-12 top-52 h-9 w-[125%] rotate-[29deg] bg-red-500/90 shadow-[0_0_0_3px_rgba(239,68,68,0.25)]" />
                 <div className="absolute -left-10 bottom-36 h-8 w-[130%] rotate-[18deg] bg-cyan-300/75" />
 
-                <div className="absolute inset-x-3 top-3 z-20 rounded-[18px] border-[3px] border-slate-950 bg-white/88 p-2 shadow-[0_3px_12px_rgba(15,23,42,0.22)] backdrop-blur-sm">
-                  <div className="grid grid-cols-[54px_minmax(0,1fr)_auto] items-start gap-2">
+                <div className="absolute inset-x-3 top-3 z-20 rounded-2xl border-2 border-slate-950 bg-white/92 p-2 shadow-[0_3px_12px_rgba(15,23,42,0.18)] backdrop-blur-sm">
+                  <div className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2">
                     <div className="grid gap-1">
-                      <span className="rounded-full border border-slate-400 bg-white px-1 py-0.5 text-center text-[10px] font-black uppercase italic leading-tight text-slate-600 shadow">
+                      <span className="rounded-full border border-slate-300 bg-white px-1 py-0.5 text-center text-[8px] font-black uppercase italic leading-tight text-slate-600 shadow-sm">
                         {cardStage}
                       </span>
-                      <div className="grid size-12 place-items-center overflow-hidden rounded-full border-4 border-slate-300 bg-white shadow-inner">
+                      <div className="grid size-9 place-items-center overflow-hidden rounded-full border-2 border-slate-300 bg-white shadow-inner">
                         {cardImageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -1298,20 +1467,20 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                       </div>
                     </div>
                     <div className="min-w-0">
-                      <h3 className="truncate text-[26px] font-black leading-none tracking-tight text-yellow-300 [text-shadow:_1px_1px_0_rgb(15_23_42),_-1px_1px_0_rgb(15_23_42),_1px_-1px_0_rgb(15_23_42),_-1px_-1px_0_rgb(15_23_42)]">
+                      <h3 className="truncate text-[18px] font-black leading-none tracking-tight text-yellow-300 [text-shadow:_1px_1px_0_rgb(15_23_42),_-1px_1px_0_rgb(15_23_42),_1px_-1px_0_rgb(15_23_42),_-1px_-1px_0_rgb(15_23_42)]">
                         {selectedPokemon.name}
-                        {isExCard ? <span className="ml-1 text-[18px] italic text-lime-300">ex</span> : null}
+                        {isExCard ? <span className="ml-1 text-[12px] italic text-lime-300">ex</span> : null}
                       </h3>
-                      <p className="mt-1 text-[11px] font-black italic leading-tight text-slate-600">
+                      <p className="mt-0.5 truncate text-[9px] font-black italic leading-tight text-slate-600">
                         Evolves from {evolvesFrom || selectedPokemon.name}
                       </p>
                     </div>
                     <div className="flex items-center gap-1">
-                      <span className="text-[10px] font-black uppercase text-slate-600">HP</span>
-                      <span className="text-[32px] font-black leading-none text-slate-950">{cardHp}</span>
+                      <span className="text-[8px] font-black uppercase text-slate-600">HP</span>
+                      <span className="text-[22px] font-black leading-none text-slate-950">{cardHp}</span>
                       <span
                         aria-label={`${cardTypeStyle.label} energy`}
-                        className="grid size-9 place-items-center rounded-full border-2 border-white text-lg font-black shadow-[inset_0_2px_5px_rgba(255,255,255,0.65),0_2px_6px_rgba(15,23,42,0.25)]"
+                        className="grid size-7 place-items-center rounded-full border-2 border-white text-sm font-black shadow-[inset_0_2px_5px_rgba(255,255,255,0.65),0_2px_6px_rgba(15,23,42,0.25)]"
                         style={{
                           backgroundColor: cardTypeStyle.color,
                           color: cardTypeStyle.textColor ?? "#ffffff",
@@ -1323,7 +1492,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                     </div>
                   </div>
                   {isExCard ? (
-                    <div className="absolute -right-2 top-12 rounded-full bg-pink-200 px-3 py-1 text-[11px] font-black italic text-pink-700 shadow">
+                    <div className="absolute -right-1 top-11 rounded-full bg-pink-200 px-2 py-0.5 text-[8px] font-black italic text-pink-700 shadow">
                       Mega-Evolved Pokemon ex
                     </div>
                   ) : null}
@@ -1333,7 +1502,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     alt="Colored Pokemon on card"
-                    className="absolute inset-x-0 top-[21%] z-10 mx-auto h-[38%] w-auto object-contain drop-shadow-[0_18px_10px_rgba(15,23,42,0.45)]"
+                    className="absolute inset-x-0 top-[22%] z-10 mx-auto h-[32%] w-auto object-contain drop-shadow-[0_14px_9px_rgba(15,23,42,0.38)]"
                     src={cardImageUrl}
                   />
                 ) : (
@@ -1342,13 +1511,13 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                   </div>
                 )}
 
-                <div className="absolute inset-x-4 bottom-[118px] z-20 grid gap-1.5 text-white [text-shadow:_1px_1px_2px_rgb(15_23_42)]">
+                <div className="absolute inset-x-4 bottom-[88px] z-20 grid gap-1 rounded-2xl bg-slate-950/55 p-2 text-white backdrop-blur-[1px] [text-shadow:_1px_1px_2px_rgb(15_23_42)]">
                   <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
                     <div className="flex -space-x-1">
                       {[0, 1].map((cost) => (
                         <span
                           key={`attack-one-${cost}`}
-                          className="grid size-6 place-items-center rounded-full border border-white text-xs font-black shadow"
+                          className="grid size-4 place-items-center rounded-full border border-white text-[9px] font-black shadow"
                           style={{
                             backgroundColor: cardTypeStyle.color,
                             color: cardTypeStyle.textColor ?? "#ffffff",
@@ -1358,10 +1527,10 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                         </span>
                       ))}
                     </div>
-                    <span className="text-[25px] font-black leading-none">{attackOneName}</span>
-                    <span className="text-[28px] font-black leading-none">{attackOneDamage}</span>
+                    <span className="truncate text-[14px] font-black leading-none">{attackOneName}</span>
+                    <span className="text-[16px] font-black leading-none">{attackOneDamage}</span>
                   </div>
-                  <p className="max-w-[94%] text-[13px] font-black leading-tight">
+                  <p className="line-clamp-2 max-w-[94%] text-[9px] font-bold leading-tight">
                     Attach up to 3 Basic Energy cards from your discard pile to your Benched Pokemon in any way you like.
                   </p>
                   <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 pt-1">
@@ -1369,7 +1538,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                       {[0, 1, 2].map((cost) => (
                         <span
                           key={`attack-two-${cost}`}
-                          className="grid size-6 place-items-center rounded-full border border-white text-xs font-black shadow"
+                          className="grid size-4 place-items-center rounded-full border border-white text-[9px] font-black shadow"
                           style={{
                             backgroundColor: cost === 2 ? "#e5e7eb" : cardTypeStyle.color,
                             color: cost === 2 ? "#111827" : cardTypeStyle.textColor ?? "#ffffff",
@@ -1379,33 +1548,38 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                         </span>
                       ))}
                     </div>
-                    <span className="text-[25px] font-black leading-none">{attackTwoName}</span>
-                    <span className="text-[28px] font-black leading-none">{attackTwoDamage}</span>
+                    <span className="truncate text-[14px] font-black leading-none">{attackTwoName}</span>
+                    <span className="text-[16px] font-black leading-none">{attackTwoDamage}</span>
                   </div>
-                  <p className="max-w-[94%] text-[13px] font-black leading-tight">
+                  <p className="line-clamp-2 max-w-[94%] text-[9px] font-bold leading-tight">
                     During your next turn, this Pokemon can&apos;t use {attackTwoName}.
                   </p>
                 </div>
 
-                <div className="absolute inset-x-3 bottom-[78px] z-20 grid grid-cols-3 gap-1 border-y border-white/80 bg-white/70 px-1 py-1 text-center text-[9px] font-black uppercase text-slate-700">
+                <div className="absolute inset-x-4 bottom-[54px] z-20 grid grid-cols-3 gap-1 rounded-lg bg-white/78 px-1 py-1 text-center text-[7px] font-black uppercase text-slate-700">
                   <span>Weakness {weakness}</span>
                   <span>Resistance {resistance}</span>
                   <span>Retreat {retreatCost}</span>
                 </div>
 
                 {isExCard ? (
-                  <div className="absolute inset-x-8 bottom-7 z-30 rounded-full border-2 border-slate-900 bg-gradient-to-r from-yellow-300 via-white to-yellow-300 px-2 py-1 text-center text-[11px] font-black leading-tight text-slate-900 shadow">
+                  <div className="absolute inset-x-9 bottom-8 z-30 rounded-full border-2 border-slate-900 bg-gradient-to-r from-yellow-300 via-white to-yellow-300 px-2 py-1 text-center text-[8px] font-black leading-tight text-slate-900 shadow">
                     Pokemon ex rule: when this Pokemon ex is Knocked Out, your opponent takes 2 Prize cards.
                   </div>
                 ) : null}
 
-                <div className="absolute inset-x-3 bottom-1 z-20 flex items-center justify-between bg-white/80 px-2 py-0.5 text-[10px] font-black text-slate-700">
+                <div className="absolute inset-x-3 bottom-1 z-20 flex items-center justify-between rounded bg-white/85 px-2 py-0.5 text-[8px] font-black text-slate-700">
                   <span>©2026 Canvas Camp</span>
                   <span>{cardNumber} ★</span>
                 </div>
               </div>
             </div>
           </div>
+
+          <button className="sticky bottom-2 z-30 flex h-12 items-center justify-center gap-2 rounded-2xl bg-lime-400 px-4 text-sm font-black text-slate-950 shadow-[0_12px_30px_rgba(132,204,22,0.35)] transition hover:bg-lime-300 disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none max-[720px]:bottom-[calc(92px+env(safe-area-inset-bottom))]" disabled={!cardImageUrl || isMintingCard} type="button" onClick={() => void mintRealisticCard()}>
+            {isMintingCard ? <Loader2 aria-hidden="true" className="animate-spin" size={18} /> : <Sparkles aria-hidden="true" size={18} />}
+            <span>{isMintingCard ? "Minting actual card" : cardImageUrl ? "Mint actual card" : "Place on card to unlock minting"}</span>
+          </button>
 
           <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
             HP
