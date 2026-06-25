@@ -417,6 +417,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const [resistance, setResistance] = useState("-30");
   const [retreatCost, setRetreatCost] = useState("★★");
   const [cardNumber, setCardNumber] = useState("179/132");
+  const [mintedCardUrl, setMintedCardUrl] = useState("");
+  const [isMintingCard, setIsMintingCard] = useState(false);
   const cardTypeStyle = TYPE_ICON_STYLES[cardType];
   const selectedPoseLabel =
     POSE_OPTIONS.find((pose) => pose.id === selectedPose)?.label ??
@@ -441,6 +443,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     setCanUndo(false);
     setImageUrl("");
     setCardImageUrl("");
+    setMintedCardUrl("");
   }
 
   const loadImageToCanvases = useCallback(async (nextImageUrl: string) => {
@@ -557,6 +560,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
           setImageUrl(images[0].renderUrl);
           setCardImageUrl("");
+          setMintedCardUrl("");
           setStatus(
             `Showing saved ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()}`,
           );
@@ -812,7 +816,145 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     }
 
     setCardImageUrl(composedImage);
+    setMintedCardUrl("");
     setStatus(`${selectedPokemon.name} placed on card`);
+  }
+
+  async function loadCardAsset(src: string) {
+    if (!src) {
+      return null;
+    }
+
+    try {
+      return await loadImage(src);
+    } catch {
+      return null;
+    }
+  }
+
+  async function composeCardPreview() {
+    if (!cardImageUrl) {
+      return "";
+    }
+
+    const cardWidth = 900;
+    const cardHeight = Math.round((cardWidth * 88) / 63);
+    const canvas = document.createElement("canvas");
+    canvas.width = cardWidth;
+    canvas.height = cardHeight;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return "";
+    }
+
+    const backgroundImage = await loadCardAsset(selectedBackground);
+    const pokemonImage = await loadCardAsset(cardImageUrl);
+    const borderWidth = 42;
+    const innerX = borderWidth;
+    const innerY = borderWidth;
+    const innerWidth = cardWidth - borderWidth * 2;
+    const innerHeight = cardHeight - borderWidth * 2;
+
+    context.fillStyle = cardBorderColor;
+    context.fillRect(0, 0, cardWidth, cardHeight);
+    context.fillStyle = "#111827";
+    context.fillRect(18, 18, cardWidth - 36, cardHeight - 36);
+    context.fillStyle = "#f8fafc";
+    context.fillRect(innerX, innerY, innerWidth, innerHeight);
+
+    if (backgroundImage) {
+      context.drawImage(backgroundImage, innerX, innerY, innerWidth, innerHeight);
+    } else {
+      const gradient = context.createLinearGradient(0, innerY, 0, innerY + innerHeight);
+      gradient.addColorStop(0, "#e0f2fe");
+      gradient.addColorStop(1, "#475569");
+      context.fillStyle = gradient;
+      context.fillRect(innerX, innerY, innerWidth, innerHeight);
+    }
+
+    context.fillStyle = "rgba(255,255,255,0.88)";
+    context.fillRect(innerX + 30, innerY + 30, innerWidth - 60, 142);
+    context.fillStyle = "#111827";
+    context.font = "800 58px Arial";
+    context.fillText(`${selectedPokemon.name}${isExCard ? " ex" : ""}`, innerX + 150, innerY + 98);
+    context.font = "800 24px Arial";
+    context.fillText(cardStage, innerX + 46, innerY + 62);
+    context.fillText(`Evolves from ${evolvesFrom || selectedPokemon.name}`, innerX + 152, innerY + 135);
+    context.font = "900 52px Arial";
+    context.fillText(`${cardHp} HP`, innerX + innerWidth - 230, innerY + 94);
+
+    if (pokemonImage) {
+      const pokemonHeight = innerHeight * 0.38;
+      const pokemonWidth = pokemonHeight * (pokemonImage.naturalWidth / pokemonImage.naturalHeight);
+      context.drawImage(
+        pokemonImage,
+        innerX + (innerWidth - pokemonWidth) / 2,
+        innerY + innerHeight * 0.22,
+        pokemonWidth,
+        pokemonHeight,
+      );
+    }
+
+    context.fillStyle = "rgba(15,23,42,0.72)";
+    context.fillRect(innerX + 42, innerY + innerHeight - 360, innerWidth - 84, 238);
+    context.fillStyle = "#ffffff";
+    context.font = "900 44px Arial";
+    context.fillText(`${attackOneName} ${attackOneDamage}`, innerX + 78, innerY + innerHeight - 288);
+    context.fillText(`${attackTwoName} ${attackTwoDamage}`, innerX + 78, innerY + innerHeight - 174);
+    context.font = "800 24px Arial";
+    context.fillText(`Weakness ${weakness}    Resistance ${resistance}    Retreat ${retreatCost}`, innerX + 78, innerY + innerHeight - 92);
+    context.fillText(`${cardNumber} ★`, innerX + innerWidth - 190, innerY + innerHeight - 28);
+
+    return canvas.toDataURL("image/png");
+  }
+
+  async function mintRealisticCard() {
+    setIsMintingCard(true);
+    setStatus("Minting realistic Pokemon card");
+
+    try {
+      const finalCardImage = await composeCardPreview();
+
+      if (!finalCardImage) {
+        throw new Error("Place your colored Pokemon on the card before minting.");
+      }
+
+      const response = await fetch("/api/mint-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          finalCardImage,
+          pokemonName: selectedPokemon.name,
+          cardType: TYPE_ICON_STYLES[cardType].label,
+          cardStage,
+          cardHp,
+          evolvesFrom,
+          isExCard,
+          attacks: [
+            { name: attackOneName, damage: attackOneDamage },
+            { name: attackTwoName, damage: attackTwoDamage },
+          ],
+          weakness,
+          resistance,
+          retreatCost,
+          cardNumber,
+          backgroundPrompt,
+        }),
+      });
+      const result = await readGenerateResponse(response);
+
+      if (!response.ok || !result.imageUrl) {
+        throw new Error(result.error || "Could not mint the realistic card.");
+      }
+
+      setMintedCardUrl(result.imageUrl);
+      setStatus(`${selectedPokemon.name} realistic card minted`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Card minting failed");
+    } finally {
+      setIsMintingCard(false);
+    }
   }
 
   async function generateBackground() {
@@ -1255,8 +1397,20 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-slate-200 bg-white p-3 max-[980px]:col-span-2 max-[980px]:border-l-0 max-[980px]:border-t max-[720px]:order-3 max-[720px]:col-span-1 max-[720px]:overflow-visible max-[720px]:rounded-[28px] max-[720px]:border max-[720px]:border-slate-200/80 max-[720px]:shadow-sm">
           <div>
             <h2 className="text-lg font-black">Pokemon card studio</h2>
-            <p className="text-xs font-bold text-slate-500">Place the colored Pokemon on a card, choose a scene, and tune battle details.</p>
+            <p className="text-xs font-bold text-slate-500">Place the colored Pokemon on a card, customize every detail, then mint an actual card.</p>
           </div>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-black text-amber-900">
+            Workflow: select Pokemon → color it → place on card → customize card → mint an actual card.
+          </div>
+
+          {mintedCardUrl ? (
+            <div className="grid gap-2 rounded-xl border border-lime-200 bg-lime-50 p-3">
+              <p className="text-xs font-black uppercase text-lime-700">Minted realistic card</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img alt="Minted realistic Pokemon card" className="w-full rounded-lg border border-lime-200" src={mintedCardUrl} />
+            </div>
+          ) : null}
 
           <div
             className="mx-auto w-full max-w-[380px] rounded-[28px] p-2 shadow-[0_18px_40px_rgba(15,23,42,0.22)] max-[720px]:max-w-[min(100%,360px)]"
@@ -1406,6 +1560,11 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
               </div>
             </div>
           </div>
+
+          <button className="flex h-12 items-center justify-center gap-2 rounded-xl bg-lime-400 px-4 text-sm font-black text-slate-950 shadow-sm disabled:opacity-40" disabled={!cardImageUrl || isMintingCard} type="button" onClick={() => void mintRealisticCard()}>
+            {isMintingCard ? <Loader2 aria-hidden="true" className="animate-spin" size={18} /> : <Sparkles aria-hidden="true" size={18} />}
+            {isMintingCard ? "Minting actual card" : "Mint actual card"}
+          </button>
 
           <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
             HP
