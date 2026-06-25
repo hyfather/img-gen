@@ -44,7 +44,17 @@ const before = await page.evaluate(() => ({
 await page.getByRole("button", { name: "Backgrounds" }).click();
 await page.getByRole("button", { name: /Meadow Stage/i }).click();
 await page.getByRole("button", { name: "Pokemon" }).click();
-await page.getByRole("button", { name: /Spark Cub.*Add/i }).click();
+await page.getByRole("button", { name: /Fire/i }).click();
+await page.waitForSelector("text=Charizard", { timeout: 5000 });
+const charizardAvailable = await page.getByText("Charizard").isVisible();
+await page.getByRole("button", { name: /Grass/i }).click();
+await page.waitForSelector("text=Bulbasaur", { timeout: 5000 });
+const bulbasaurAvailable = await page.getByText("Bulbasaur").isVisible();
+await page.getByRole("button", { name: /Electric/i }).click();
+const pikachuAvailable = await page.getByText("Pikachu").isVisible();
+const topThreeAvailable =
+  pikachuAvailable && charizardAvailable && bulbasaurAvailable;
+await page.getByRole("button", { name: /Pikachu.*Add/i }).click();
 await page.getByRole("button", { name: "Close settings" }).click();
 await page.getByRole("button", { name: "Open settings" }).click();
 await page.getByLabel("Name").fill("Kinder Card");
@@ -69,7 +79,9 @@ const after = await page.evaluate(() => ({
   ),
   simplifiedCard:
     !Array.from(document.querySelectorAll("svg text")).some((text) =>
-      ["Zap Hop", "Electric type"].includes(text.textContent?.trim() ?? ""),
+      ["Thunderbolt", "Electric type"].includes(
+        text.textContent?.trim() ?? "",
+      ),
     ) &&
     Array.from(document.querySelectorAll("svg text")).some((text) =>
       text.textContent?.trim().startsWith("Kinder"),
@@ -80,6 +92,7 @@ const after = await page.evaluate(() => ({
   shapeButtonsRemoved: !document.body.innerText.includes("Box"),
   svgGroupCount: document.querySelectorAll("svg g").length,
 }));
+after.topThreeAvailable = topThreeAvailable;
 
 const screenshot = await page.screenshot({ fullPage: true });
 await writeFile(screenshotPath, screenshot);

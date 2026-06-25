@@ -31,9 +31,12 @@ type PokemonType =
   | "ice"
   | "fairy";
 
+type PokemonSpecies = "pikachu" | "charizard" | "bulbasaur";
+
 type CanvasItem = {
   id: string;
   label: string;
+  species: PokemonSpecies;
   x: number;
   y: number;
   width: number;
@@ -48,6 +51,7 @@ type CanvasItem = {
 
 type PokemonTemplate = {
   label: string;
+  species: PokemonSpecies;
   pokemonType: PokemonType;
   hp: number;
   move: string;
@@ -143,56 +147,32 @@ const POKEMON_TYPES: Record<
 };
 
 const TYPE_LIST = Object.keys(POKEMON_TYPES) as PokemonType[];
+const PICKER_TYPE_LIST = ["electric", "fire", "grass"] as PokemonType[];
 
 const POKEMON_TEMPLATES: PokemonTemplate[] = [
   {
-    label: "Spark Cub",
+    label: "Pikachu",
+    species: "pikachu",
     pokemonType: "electric",
     hp: 60,
-    move: "Zap Hop",
+    move: "Thunderbolt",
     fill: "#fef08a",
   },
   {
-    label: "Sprout Pal",
-    pokemonType: "grass",
-    hp: 70,
-    move: "Leaf Hug",
-    fill: "#bbf7d0",
-  },
-  {
-    label: "Bubble Pup",
-    pokemonType: "water",
-    hp: 65,
-    move: "Splash Dash",
-    fill: "#bae6fd",
-  },
-  {
-    label: "Toast Tot",
+    label: "Charizard",
+    species: "charizard",
     pokemonType: "fire",
-    hp: 75,
-    move: "Warm Wiggle",
+    hp: 150,
+    move: "Flamethrower",
     fill: "#fed7aa",
   },
   {
-    label: "Dream Kit",
-    pokemonType: "psychic",
-    hp: 80,
-    move: "Mind Bloom",
-    fill: "#fbcfe8",
-  },
-  {
-    label: "Snow Bean",
-    pokemonType: "ice",
-    hp: 55,
-    move: "Frost Pop",
-    fill: "#cffafe",
-  },
-  {
-    label: "Charm Puff",
-    pokemonType: "fairy",
-    hp: 90,
-    move: "Glitter Bop",
-    fill: "#fecdd3",
+    label: "Bulbasaur",
+    species: "bulbasaur",
+    pokemonType: "grass",
+    hp: 70,
+    move: "Vine Whip",
+    fill: "#bbf7d0",
   },
 ];
 
@@ -297,21 +277,197 @@ function typeMarkSvg(
   `;
 }
 
+function pokemonArtSvg(
+  species: PokemonSpecies,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const sx = (value: number) => x + width * value;
+  const sy = (value: number) => y + height * value;
+  const stroke = Math.max(2, width * 0.018);
+
+  if (species === "charizard") {
+    return `
+      <g>
+        <path d="M ${sx(0.42)} ${sy(0.43)} C ${sx(0.18)} ${sy(0.04)} ${sx(
+          0.06,
+        )} ${sy(0.22)} ${sx(0.16)} ${sy(0.56)} C ${sx(0.25)} ${sy(
+          0.45,
+        )} ${sx(0.34)} ${sy(0.5)} ${sx(0.43)} ${sy(
+          0.57,
+        )} Z" fill="#7dd3fc" stroke="#111827" stroke-width="${stroke}" stroke-linejoin="round" />
+        <path d="M ${sx(0.58)} ${sy(0.43)} C ${sx(0.82)} ${sy(0.04)} ${sx(
+          0.94,
+        )} ${sy(0.22)} ${sx(0.84)} ${sy(0.56)} C ${sx(0.75)} ${sy(
+          0.45,
+        )} ${sx(0.66)} ${sy(0.5)} ${sx(0.57)} ${sy(
+          0.57,
+        )} Z" fill="#7dd3fc" stroke="#111827" stroke-width="${stroke}" stroke-linejoin="round" />
+        <path d="M ${sx(0.61)} ${sy(0.74)} C ${sx(0.84)} ${sy(0.72)} ${sx(
+          0.86,
+        )} ${sy(0.48)} ${sx(0.71)} ${sy(0.44)}" fill="none" stroke="#fb923c" stroke-width="${
+          stroke * 4.2
+        }" stroke-linecap="round" />
+        <path d="M ${sx(0.72)} ${sy(0.31)} C ${sx(0.8)} ${sy(0.43)} ${sx(
+          0.91,
+        )} ${sy(0.38)} ${sx(0.84)} ${sy(0.52)} C ${sx(0.73)} ${sy(
+          0.56,
+        )} ${sx(0.67)} ${sy(0.47)} ${sx(0.72)} ${sy(
+          0.31,
+        )} Z" fill="#f97316" stroke="#111827" stroke-width="${stroke}" stroke-linejoin="round" />
+        <path d="M ${sx(0.77)} ${sy(0.37)} C ${sx(0.81)} ${sy(0.44)} ${sx(
+          0.86,
+        )} ${sy(0.42)} ${sx(0.83)} ${sy(0.49)} C ${sx(0.77)} ${sy(
+          0.51,
+        )} ${sx(0.74)} ${sy(0.46)} ${sx(0.77)} ${sy(
+          0.37,
+        )} Z" fill="#fde047" />
+        <ellipse cx="${sx(0.5)}" cy="${sy(0.64)}" rx="${width * 0.16}" ry="${
+          height * 0.24
+        }" fill="#fb923c" stroke="#111827" stroke-width="${stroke}" />
+        <ellipse cx="${sx(0.5)}" cy="${sy(0.69)}" rx="${width * 0.09}" ry="${
+          height * 0.15
+        }" fill="#ffedd5" stroke="#111827" stroke-width="${stroke * 0.65}" />
+        <circle cx="${sx(0.5)}" cy="${sy(0.36)}" r="${
+          width * 0.15
+        }" fill="#fb923c" stroke="#111827" stroke-width="${stroke}" />
+        <path d="M ${sx(0.42)} ${sy(0.22)} L ${sx(0.36)} ${sy(0.1)} L ${sx(
+          0.5,
+        )} ${sy(0.2)} Z" fill="#ffedd5" stroke="#111827" stroke-width="${stroke}" stroke-linejoin="round" />
+        <path d="M ${sx(0.58)} ${sy(0.22)} L ${sx(0.64)} ${sy(0.1)} L ${sx(
+          0.5,
+        )} ${sy(0.2)} Z" fill="#ffedd5" stroke="#111827" stroke-width="${stroke}" stroke-linejoin="round" />
+        <ellipse cx="${sx(0.42)}" cy="${sy(0.39)}" rx="${width * 0.08}" ry="${
+          height * 0.06
+        }" fill="#ffedd5" stroke="#111827" stroke-width="${stroke * 0.75}" />
+        <circle cx="${sx(0.45)}" cy="${sy(0.33)}" r="${width * 0.014}" fill="#111827" />
+        <circle cx="${sx(0.56)}" cy="${sy(0.33)}" r="${width * 0.014}" fill="#111827" />
+        <path d="M ${sx(0.46)} ${sy(0.42)} Q ${sx(0.5)} ${sy(0.46)} ${sx(
+          0.56,
+        )} ${sy(0.42)}" fill="none" stroke="#111827" stroke-width="${stroke}" stroke-linecap="round" />
+        <path d="M ${sx(0.38)} ${sy(0.57)} C ${sx(0.27)} ${sy(0.58)} ${sx(
+          0.24,
+        )} ${sy(0.68)} ${sx(0.32)} ${sy(0.74)}" fill="none" stroke="#111827" stroke-width="${stroke}" stroke-linecap="round" />
+        <path d="M ${sx(0.62)} ${sy(0.57)} C ${sx(0.73)} ${sy(0.58)} ${sx(
+          0.76,
+        )} ${sy(0.68)} ${sx(0.68)} ${sy(0.74)}" fill="none" stroke="#111827" stroke-width="${stroke}" stroke-linecap="round" />
+      </g>
+    `;
+  }
+
+  if (species === "bulbasaur") {
+    return `
+      <g>
+        <path d="M ${sx(0.37)} ${sy(0.35)} C ${sx(0.34)} ${sy(0.09)} ${sx(
+          0.66,
+        )} ${sy(0.09)} ${sx(0.63)} ${sy(0.35)} C ${sx(0.76)} ${sy(
+          0.32,
+        )} ${sx(0.75)} ${sy(0.55)} ${sx(0.5)} ${sy(
+          0.57,
+        )} C ${sx(0.25)} ${sy(0.55)} ${sx(0.24)} ${sy(0.32)} ${sx(
+          0.37,
+        )} ${sy(0.35)} Z" fill="#22c55e" stroke="#111827" stroke-width="${stroke}" stroke-linejoin="round" />
+        <path d="M ${sx(0.5)} ${sy(0.15)} C ${sx(0.45)} ${sy(0.28)} ${sx(
+          0.43,
+        )} ${sy(0.42)} ${sx(0.5)} ${sy(0.56)} C ${sx(0.57)} ${sy(
+          0.42,
+        )} ${sx(0.55)} ${sy(0.28)} ${sx(0.5)} ${sy(
+          0.15,
+        )} Z" fill="#15803d" opacity="0.55" />
+        <ellipse cx="${sx(0.5)}" cy="${sy(0.67)}" rx="${width * 0.28}" ry="${
+          height * 0.17
+        }" fill="#86efac" stroke="#111827" stroke-width="${stroke}" />
+        <circle cx="${sx(0.39)}" cy="${sy(0.48)}" r="${
+          width * 0.17
+        }" fill="#86efac" stroke="#111827" stroke-width="${stroke}" />
+        <path d="M ${sx(0.28)} ${sy(0.36)} L ${sx(0.19)} ${sy(0.19)} L ${sx(
+          0.39,
+        )} ${sy(0.32)} Z" fill="#86efac" stroke="#111827" stroke-width="${stroke}" stroke-linejoin="round" />
+        <path d="M ${sx(0.49)} ${sy(0.34)} L ${sx(0.64)} ${sy(0.23)} L ${sx(
+          0.57,
+        )} ${sy(0.45)} Z" fill="#86efac" stroke="#111827" stroke-width="${stroke}" stroke-linejoin="round" />
+        <ellipse cx="${sx(0.37)}" cy="${sy(0.76)}" rx="${width * 0.08}" ry="${
+          height * 0.055
+        }" fill="#4ade80" stroke="#111827" stroke-width="${stroke * 0.65}" />
+        <ellipse cx="${sx(0.62)}" cy="${sy(0.76)}" rx="${width * 0.08}" ry="${
+          height * 0.055
+        }" fill="#4ade80" stroke="#111827" stroke-width="${stroke * 0.65}" />
+        <circle cx="${sx(0.43)}" cy="${sy(0.44)}" r="${width * 0.021}" fill="#111827" />
+        <circle cx="${sx(0.29)}" cy="${sy(0.45)}" r="${width * 0.021}" fill="#111827" />
+        <circle cx="${sx(0.34)}" cy="${sy(0.31)}" r="${width * 0.025}" fill="#16a34a" opacity="0.7" />
+        <circle cx="${sx(0.58)}" cy="${sy(0.64)}" r="${width * 0.028}" fill="#16a34a" opacity="0.7" />
+        <path d="M ${sx(0.3)} ${sy(0.54)} Q ${sx(0.36)} ${sy(0.59)} ${sx(
+          0.44,
+        )} ${sy(0.54)}" fill="none" stroke="#111827" stroke-width="${stroke}" stroke-linecap="round" />
+      </g>
+    `;
+  }
+
+  return `
+    <g>
+      <path d="M ${sx(0.66)} ${sy(0.62)} L ${sx(0.91)} ${sy(0.51)} L ${sx(
+        0.81,
+      )} ${sy(0.43)} L ${sx(0.97)} ${sy(0.28)} L ${sx(0.75)} ${sy(
+        0.38,
+      )} L ${sx(0.85)} ${sy(0.47)} L ${sx(0.62)} ${sy(
+        0.57,
+      )} Z" fill="#fde047" stroke="#111827" stroke-width="${stroke}" stroke-linejoin="round" />
+      <path d="M ${sx(0.64)} ${sy(0.61)} L ${sx(0.75)} ${sy(0.55)} L ${sx(
+        0.68,
+      )} ${sy(0.51)} L ${sx(0.57)} ${sy(0.56)} Z" fill="#a16207" />
+      <ellipse cx="${sx(0.5)}" cy="${sy(0.68)}" rx="${width * 0.18}" ry="${
+        height * 0.19
+      }" fill="#fde047" stroke="#111827" stroke-width="${stroke}" />
+      <path d="M ${sx(0.39)} ${sy(0.3)} L ${sx(0.31)} ${sy(0.03)} L ${sx(
+        0.48,
+      )} ${sy(0.25)} Z" fill="#fde047" stroke="#111827" stroke-width="${stroke}" stroke-linejoin="round" />
+      <path d="M ${sx(0.31)} ${sy(0.03)} L ${sx(0.36)} ${sy(0.2)} L ${sx(
+        0.42,
+      )} ${sy(0.17)} Z" fill="#111827" />
+      <path d="M ${sx(0.61)} ${sy(0.3)} L ${sx(0.69)} ${sy(0.03)} L ${sx(
+        0.52,
+      )} ${sy(0.25)} Z" fill="#fde047" stroke="#111827" stroke-width="${stroke}" stroke-linejoin="round" />
+      <path d="M ${sx(0.69)} ${sy(0.03)} L ${sx(0.64)} ${sy(0.2)} L ${sx(
+        0.58,
+      )} ${sy(0.17)} Z" fill="#111827" />
+      <circle cx="${sx(0.5)}" cy="${sy(0.38)}" r="${
+        width * 0.19
+      }" fill="#fde047" stroke="#111827" stroke-width="${stroke}" />
+      <circle cx="${sx(0.43)}" cy="${sy(0.37)}" r="${width * 0.028}" fill="#111827" />
+      <circle cx="${sx(0.57)}" cy="${sy(0.37)}" r="${width * 0.028}" fill="#111827" />
+      <circle cx="${sx(0.39)}" cy="${sy(0.47)}" r="${width * 0.045}" fill="#ef4444" stroke="#111827" stroke-width="${stroke * 0.7}" />
+      <circle cx="${sx(0.61)}" cy="${sy(0.47)}" r="${width * 0.045}" fill="#ef4444" stroke="#111827" stroke-width="${stroke * 0.7}" />
+      <path d="M ${sx(0.47)} ${sy(0.48)} Q ${sx(0.5)} ${sy(0.53)} ${sx(
+        0.53,
+      )} ${sy(0.48)}" fill="none" stroke="#111827" stroke-width="${stroke}" stroke-linecap="round" />
+      <ellipse cx="${sx(0.39)}" cy="${sy(0.84)}" rx="${width * 0.07}" ry="${
+        height * 0.04
+      }" fill="#fde047" stroke="#111827" stroke-width="${stroke * 0.65}" />
+      <ellipse cx="${sx(0.61)}" cy="${sy(0.84)}" rx="${width * 0.07}" ry="${
+        height * 0.04
+      }" fill="#fde047" stroke="#111827" stroke-width="${stroke * 0.65}" />
+    </g>
+  `;
+}
+
 function pokemonCardSvg(item: CanvasItem) {
   const typeStyle = POKEMON_TYPES[item.pokemonType];
   const x = item.x;
   const y = item.y;
   const width = item.width;
   const height = item.height;
-  const cx = x + width / 2;
   const imageTop = y + height * 0.18;
   const imageHeight = height * 0.38;
+  const artX = x + width * 0.13;
+  const artY = imageTop + imageHeight * 0.02;
+  const artWidth = width * 0.74;
+  const artHeight = imageHeight * 0.9;
   const titleSize = clamp(width * 0.085, 15, 24);
   const hpSize = clamp(width * 0.075, 12, 22);
   const bodySize = clamp(width * 0.075, 11, 21);
   const radius = Math.min(8, width * 0.04);
-  const creatureTop = imageTop + imageHeight * 0.18;
-  const creatureBase = imageTop + imageHeight * 0.73;
   const hpText = `HP ${item.hp}`;
   const hpX = item.showOutline ? x + width * 0.78 : x + width * 0.08;
   const hpY = item.showOutline ? y + height * 0.103 : y + height * 0.16;
@@ -362,33 +518,10 @@ function pokemonCardSvg(item: CanvasItem) {
           )}" fill="#ffffff" fill-opacity="0.72" ${svgStroke(item, 2)} />`
         : ""
     }
-    <ellipse cx="${cx}" cy="${creatureBase}" rx="${width * 0.19}" ry="${
-      imageHeight * 0.2
-    }" fill="${typeStyle.color}" fill-opacity="0.22" />
-    <circle cx="${cx}" cy="${creatureTop + imageHeight * 0.24}" r="${
-      width * 0.15
-    }" fill="${typeStyle.color}" stroke="#111827" stroke-width="3" />
-    <ellipse cx="${cx - width * 0.085}" cy="${
-      creatureTop + imageHeight * 0.21
-    }" rx="${width * 0.055}" ry="${imageHeight * 0.12}" fill="${
-      typeStyle.soft
-    }" stroke="#111827" stroke-width="3" />
-    <ellipse cx="${cx + width * 0.085}" cy="${
-      creatureTop + imageHeight * 0.21
-    }" rx="${width * 0.055}" ry="${imageHeight * 0.12}" fill="${
-      typeStyle.soft
-    }" stroke="#111827" stroke-width="3" />
-    <circle cx="${cx - width * 0.05}" cy="${
-      creatureTop + imageHeight * 0.27
-    }" r="${width * 0.012}" fill="#111827" />
-    <circle cx="${cx + width * 0.05}" cy="${
-      creatureTop + imageHeight * 0.27
-    }" r="${width * 0.012}" fill="#111827" />
-    <path d="M ${cx - width * 0.045} ${
-      creatureTop + imageHeight * 0.36
-    } Q ${cx} ${creatureTop + imageHeight * 0.43} ${cx + width * 0.045} ${
-      creatureTop + imageHeight * 0.36
-    }" fill="none" stroke="#111827" stroke-width="3" stroke-linecap="round" />
+    <ellipse cx="${x + width / 2}" cy="${artY + artHeight * 0.9}" rx="${
+      artWidth * 0.3
+    }" ry="${artHeight * 0.1}" fill="${typeStyle.color}" fill-opacity="0.22" />
+    ${pokemonArtSvg(item.species, artX, artY, artWidth, artHeight)}
     ${
       item.showOutline
         ? `
@@ -438,15 +571,55 @@ function exportItemsSvg(items: CanvasItem[]) {
   `;
 }
 
-function TypeDot({ type }: { type: PokemonType }) {
+function PokemonArt({
+  species,
+  x,
+  y,
+  width,
+  height,
+}: {
+  species: PokemonSpecies;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}) {
+  return (
+    <g
+      dangerouslySetInnerHTML={{
+        __html: pokemonArtSvg(species, x, y, width, height),
+      }}
+    />
+  );
+}
+
+function PokemonThumbnail({
+  species,
+  type,
+}: {
+  species: PokemonSpecies;
+  type: PokemonType;
+}) {
   const style = POKEMON_TYPES[type];
 
   return (
-    <span
-      className="grid size-8 place-items-center rounded-full border-2 border-slate-950 text-sm font-black"
-      style={{ background: style.color, color: style.ink }}
-    >
-      {style.abbr}
+    <span className="grid size-12 place-items-center rounded-lg border-2 border-slate-950 bg-white">
+      <svg
+        aria-hidden="true"
+        className="size-10 overflow-visible"
+        viewBox="0 0 48 48"
+      >
+        <ellipse
+          cx="24"
+          cy="41"
+          fill={style.color}
+          fillOpacity="0.2"
+          rx="15"
+          ry="5"
+        />
+        <PokemonArt height={40} species={species} width={40} x={4} y={2} />
+      </svg>
+      <span className="sr-only">{style.name}</span>
     </span>
   );
 }
@@ -599,6 +772,7 @@ export function CanvasEditor({
     const newItem: CanvasItem = {
       id: makeId(),
       label: template.label,
+      species: template.species,
       pokemonType: template.pokemonType,
       hp: template.hp,
       move: template.move,
@@ -1115,7 +1289,7 @@ export function CanvasEditor({
         {activePanel === "pokemon" ? (
           <>
             <div className="grid grid-cols-4 gap-2">
-              {TYPE_LIST.map((type) => {
+              {PICKER_TYPE_LIST.map((type) => {
                 const style = POKEMON_TYPES[type];
 
                 return (
@@ -1145,7 +1319,10 @@ export function CanvasEditor({
                   type="button"
                   onClick={() => addPokemon(template)}
                 >
-                  <TypeDot type={template.pokemonType} />
+                  <PokemonThumbnail
+                    species={template.species}
+                    type={template.pokemonType}
+                  />
                   <span>
                     <span className="block text-base font-black leading-tight">
                       {template.label}
@@ -1468,9 +1645,10 @@ function PokemonCard({ item }: { item: CanvasItem }) {
   const bodySize = clamp(item.width * 0.075, 11, 21);
   const imageTop = item.y + item.height * 0.18;
   const imageHeight = item.height * 0.38;
-  const centerX = item.x + item.width / 2;
-  const creatureTop = imageTop + imageHeight * 0.18;
-  const creatureBase = imageTop + imageHeight * 0.73;
+  const artX = item.x + item.width * 0.13;
+  const artY = imageTop + imageHeight * 0.02;
+  const artWidth = item.width * 0.74;
+  const artHeight = imageHeight * 0.9;
   const radius = Math.min(8, item.width * 0.04);
   const hpText = `HP ${item.hp}`;
   const hpX = item.showOutline
@@ -1554,61 +1732,19 @@ function PokemonCard({ item }: { item: CanvasItem }) {
         />
       ) : null}
       <ellipse
-        cx={centerX}
-        cy={creatureBase}
+        cx={item.x + item.width / 2}
+        cy={artY + artHeight * 0.9}
         fill={typeStyle.color}
         fillOpacity="0.22"
-        rx={item.width * 0.19}
-        ry={imageHeight * 0.2}
+        rx={artWidth * 0.3}
+        ry={artHeight * 0.1}
       />
-      <circle
-        cx={centerX}
-        cy={creatureTop + imageHeight * 0.24}
-        fill={typeStyle.color}
-        r={item.width * 0.15}
-        stroke="#111827"
-        strokeWidth="3"
-      />
-      <ellipse
-        cx={centerX - item.width * 0.085}
-        cy={creatureTop + imageHeight * 0.21}
-        fill={typeStyle.soft}
-        rx={item.width * 0.055}
-        ry={imageHeight * 0.12}
-        stroke="#111827"
-        strokeWidth="3"
-      />
-      <ellipse
-        cx={centerX + item.width * 0.085}
-        cy={creatureTop + imageHeight * 0.21}
-        fill={typeStyle.soft}
-        rx={item.width * 0.055}
-        ry={imageHeight * 0.12}
-        stroke="#111827"
-        strokeWidth="3"
-      />
-      <circle
-        cx={centerX - item.width * 0.05}
-        cy={creatureTop + imageHeight * 0.27}
-        fill="#111827"
-        r={item.width * 0.012}
-      />
-      <circle
-        cx={centerX + item.width * 0.05}
-        cy={creatureTop + imageHeight * 0.27}
-        fill="#111827"
-        r={item.width * 0.012}
-      />
-      <path
-        d={`M ${centerX - item.width * 0.045} ${
-          creatureTop + imageHeight * 0.36
-        } Q ${centerX} ${creatureTop + imageHeight * 0.43} ${
-          centerX + item.width * 0.045
-        } ${creatureTop + imageHeight * 0.36}`}
-        fill="none"
-        stroke="#111827"
-        strokeLinecap="round"
-        strokeWidth="3"
+      <PokemonArt
+        height={artHeight}
+        species={item.species}
+        width={artWidth}
+        x={artX}
+        y={artY}
       />
       {item.showOutline ? (
         <>
