@@ -882,151 +882,149 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
           </div>
 
           <div
-            className="rounded-[30px] p-2 shadow-[0_18px_40px_rgba(15,23,42,0.2)]"
+            className="mx-auto w-full max-w-[380px] rounded-[28px] p-2 shadow-[0_18px_40px_rgba(15,23,42,0.22)]"
             style={{ backgroundColor: cardBorderColor }}
           >
-            <div className="relative overflow-hidden rounded-[24px] border-2 border-white/40 bg-gradient-to-br from-slate-300 via-slate-100 to-slate-500 p-2">
-              <div className="pointer-events-none absolute -left-20 top-20 h-16 w-[150%] rotate-[-28deg] bg-cyan-400/80 blur-[1px]" />
-              <div className="pointer-events-none absolute -right-16 top-40 h-12 w-[120%] rotate-[35deg] bg-red-500/80 blur-[1px]" />
-              <div className="relative rounded-[20px] border-[3px] border-slate-900 bg-gradient-to-br from-slate-50/95 via-white/85 to-slate-200/95 p-2 shadow-inner">
-                <div className="relative z-10 flex items-start gap-2 rounded-t-[14px] bg-gradient-to-r from-white/95 via-cyan-100/95 to-white/80 px-2 py-1 shadow-sm">
-                  <div className="grid w-14 shrink-0 gap-1">
-                    <span className="rounded-full border border-slate-400 bg-white px-2 py-0.5 text-center text-[10px] font-black uppercase italic text-slate-600 shadow">
-                      {cardStage}
-                    </span>
-                    <div className="grid aspect-square place-items-center overflow-hidden rounded-full border-4 border-slate-300 bg-white shadow-inner">
-                      {cardImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          alt={`${selectedPokemon.name} evolution portrait`}
-                          className="size-full object-contain p-1"
-                          src={cardImageUrl}
-                        />
-                      ) : (
-                        <span className="text-lg">?</span>
-                      )}
+            <div className="relative aspect-[63/88] overflow-hidden rounded-[22px] border-2 border-white/50 bg-slate-800 p-2">
+              <div className="absolute inset-1 rounded-[20px] border-4 border-slate-300/80" />
+              <div className="relative size-full overflow-hidden rounded-[18px] border-[3px] border-slate-950 bg-slate-100">
+                {selectedBackground ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    alt="Selected card background"
+                    className="absolute inset-0 size-full object-cover"
+                    src={selectedBackground}
+                  />
+                ) : null}
+                <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-slate-950/30" />
+                <div className="absolute -left-16 top-28 h-9 w-[135%] rotate-[-27deg] bg-cyan-400/90 shadow-[0_0_0_3px_rgba(14,165,233,0.25)]" />
+                <div className="absolute -right-12 top-52 h-9 w-[125%] rotate-[29deg] bg-red-500/90 shadow-[0_0_0_3px_rgba(239,68,68,0.25)]" />
+                <div className="absolute -left-10 bottom-36 h-8 w-[130%] rotate-[18deg] bg-cyan-300/75" />
+
+                <div className="absolute inset-x-3 top-3 z-20 rounded-[18px] border-[3px] border-slate-950 bg-white/88 p-2 shadow-[0_3px_12px_rgba(15,23,42,0.22)] backdrop-blur-sm">
+                  <div className="grid grid-cols-[54px_minmax(0,1fr)_auto] items-start gap-2">
+                    <div className="grid gap-1">
+                      <span className="rounded-full border border-slate-400 bg-white px-1 py-0.5 text-center text-[10px] font-black uppercase italic leading-tight text-slate-600 shadow">
+                        {cardStage}
+                      </span>
+                      <div className="grid size-12 place-items-center overflow-hidden rounded-full border-4 border-slate-300 bg-white shadow-inner">
+                        {cardImageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            alt={`${selectedPokemon.name} evolution portrait`}
+                            className="size-full object-contain p-1"
+                            src={cardImageUrl}
+                          />
+                        ) : (
+                          <span className="text-lg font-black">?</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-[26px] font-black leading-none tracking-tight text-yellow-300 [text-shadow:_1px_1px_0_rgb(15_23_42),_-1px_1px_0_rgb(15_23_42),_1px_-1px_0_rgb(15_23_42),_-1px_-1px_0_rgb(15_23_42)]">
+                        {selectedPokemon.name}
+                        {isExCard ? <span className="ml-1 text-[18px] italic text-lime-300">ex</span> : null}
+                      </h3>
+                      <p className="mt-1 text-[11px] font-black italic leading-tight text-slate-600">
+                        Evolves from {evolvesFrom || selectedPokemon.name}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-black uppercase text-slate-600">HP</span>
+                      <span className="text-[32px] font-black leading-none text-slate-950">{cardHp}</span>
+                      <span
+                        aria-label={`${cardTypeStyle.label} energy`}
+                        className="grid size-9 place-items-center rounded-full border-2 border-white text-lg font-black shadow-[inset_0_2px_5px_rgba(255,255,255,0.65),0_2px_6px_rgba(15,23,42,0.25)]"
+                        style={{
+                          backgroundColor: cardTypeStyle.color,
+                          color: cardTypeStyle.textColor ?? "#ffffff",
+                        }}
+                        title={`${cardTypeStyle.label} energy`}
+                      >
+                        {cardTypeStyle.glyph}
+                      </span>
                     </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-1">
-                      <h3 className="truncate text-2xl font-black leading-none tracking-tight text-yellow-300 [text-shadow:_1px_1px_0_rgb(15_23_42),_-1px_1px_0_rgb(15_23_42),_1px_-1px_0_rgb(15_23_42),_-1px_-1px_0_rgb(15_23_42)]">
-                        {selectedPokemon.name}
-                        {isExCard ? <span className="ml-1 text-xl italic text-lime-300">ex</span> : null}
-                      </h3>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <span className="text-[10px] font-black uppercase text-slate-600">HP</span>
-                        <span className="text-3xl font-black leading-none text-slate-950">{cardHp}</span>
+                  {isExCard ? (
+                    <div className="absolute -right-2 top-12 rounded-full bg-pink-200 px-3 py-1 text-[11px] font-black italic text-pink-700 shadow">
+                      Mega-Evolved Pokemon ex
+                    </div>
+                  ) : null}
+                </div>
+
+                {cardImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    alt="Colored Pokemon on card"
+                    className="absolute inset-x-0 top-[21%] z-10 mx-auto h-[38%] w-auto object-contain drop-shadow-[0_18px_10px_rgba(15,23,42,0.45)]"
+                    src={cardImageUrl}
+                  />
+                ) : (
+                  <div className="absolute inset-x-8 top-[27%] z-10 text-center text-xl font-black text-slate-600/80">
+                    Color a Pokemon, then place it here.
+                  </div>
+                )}
+
+                <div className="absolute inset-x-4 bottom-[118px] z-20 grid gap-1.5 text-white [text-shadow:_1px_1px_2px_rgb(15_23_42)]">
+                  <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+                    <div className="flex -space-x-1">
+                      {[0, 1].map((cost) => (
                         <span
-                          aria-label={`${cardTypeStyle.label} energy`}
-                          className="grid size-8 place-items-center rounded-full border-2 border-white text-base font-black shadow-[inset_0_2px_5px_rgba(255,255,255,0.65),0_2px_6px_rgba(15,23,42,0.25)]"
+                          key={`attack-one-${cost}`}
+                          className="grid size-6 place-items-center rounded-full border border-white text-xs font-black shadow"
                           style={{
                             backgroundColor: cardTypeStyle.color,
                             color: cardTypeStyle.textColor ?? "#ffffff",
                           }}
-                          title={`${cardTypeStyle.label} energy`}
                         >
                           {cardTypeStyle.glyph}
                         </span>
-                      </div>
+                      ))}
                     </div>
-                    <div className="mt-1 flex items-center gap-1 text-[10px] font-black italic text-slate-600">
-                      <span>Evolves from {evolvesFrom || selectedPokemon.name}</span>
-                      {isExCard ? (
-                        <span className="ml-auto rounded-full bg-pink-200 px-2 py-0.5 text-[9px] text-pink-700">
-                          Mega-Evolved Pokemon ex
-                        </span>
-                      ) : null}
-                    </div>
+                    <span className="text-[25px] font-black leading-none">{attackOneName}</span>
+                    <span className="text-[28px] font-black leading-none">{attackOneDamage}</span>
                   </div>
+                  <p className="max-w-[94%] text-[13px] font-black leading-tight">
+                    Attach up to 3 Basic Energy cards from your discard pile to your Benched Pokemon in any way you like.
+                  </p>
+                  <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 pt-1">
+                    <div className="flex -space-x-1">
+                      {[0, 1, 2].map((cost) => (
+                        <span
+                          key={`attack-two-${cost}`}
+                          className="grid size-6 place-items-center rounded-full border border-white text-xs font-black shadow"
+                          style={{
+                            backgroundColor: cost === 2 ? "#e5e7eb" : cardTypeStyle.color,
+                            color: cost === 2 ? "#111827" : cardTypeStyle.textColor ?? "#ffffff",
+                          }}
+                        >
+                          {cost === 2 ? "★" : cardTypeStyle.glyph}
+                        </span>
+                      ))}
+                    </div>
+                    <span className="text-[25px] font-black leading-none">{attackTwoName}</span>
+                    <span className="text-[28px] font-black leading-none">{attackTwoDamage}</span>
+                  </div>
+                  <p className="max-w-[94%] text-[13px] font-black leading-tight">
+                    During your next turn, this Pokemon can&apos;t use {attackTwoName}.
+                  </p>
                 </div>
 
-                <div className="relative -mt-1 aspect-[2/2.95] overflow-hidden rounded-b-[16px] border-[3px] border-slate-900 bg-slate-100">
-                  {selectedBackground ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      alt="Selected card background"
-                      className="absolute inset-0 size-full object-cover"
-                      src={selectedBackground}
-                    />
-                  ) : null}
-                  <div className="absolute inset-0 bg-gradient-to-b from-white/15 via-transparent to-slate-950/25" />
-                  <div className="absolute -left-16 top-28 h-8 w-[135%] rotate-[-26deg] bg-cyan-400/90 shadow-[0_0_0_3px_rgba(14,165,233,0.35)]" />
-                  <div className="absolute -right-10 top-36 h-8 w-[120%] rotate-[28deg] bg-red-500/90 shadow-[0_0_0_3px_rgba(239,68,68,0.25)]" />
-                  <div className="absolute -left-10 bottom-32 h-7 w-[120%] rotate-[18deg] bg-cyan-300/80" />
-                  {cardImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      alt="Colored Pokemon on card"
-                      className="absolute inset-x-0 top-14 mx-auto h-[53%] w-auto object-contain drop-shadow-[0_16px_10px_rgba(15,23,42,0.42)]"
-                      src={cardImageUrl}
-                    />
-                  ) : (
-                    <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm font-black text-slate-500">
-                      Color a Pokemon, then place it here.
-                    </div>
-                  )}
+                <div className="absolute inset-x-3 bottom-[78px] z-20 grid grid-cols-3 gap-1 border-y border-white/80 bg-white/70 px-1 py-1 text-center text-[9px] font-black uppercase text-slate-700">
+                  <span>Weakness {weakness}</span>
+                  <span>Resistance {resistance}</span>
+                  <span>Retreat {retreatCost}</span>
+                </div>
 
-                  <div className="absolute inset-x-3 bottom-24 grid gap-2 text-white [text-shadow:_1px_1px_2px_rgb(15_23_42)]">
-                    <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2">
-                      <div className="flex -space-x-1">
-                        {[0, 1].map((cost) => (
-                          <span
-                            key={`attack-one-${cost}`}
-                            className="grid size-6 place-items-center rounded-full border border-white text-xs font-black shadow"
-                            style={{
-                              backgroundColor: cardTypeStyle.color,
-                              color: cardTypeStyle.textColor ?? "#ffffff",
-                            }}
-                          >
-                            {cardTypeStyle.glyph}
-                          </span>
-                        ))}
-                      </div>
-                      <span className="text-xl font-black leading-none">{attackOneName}</span>
-                      <span className="text-2xl font-black leading-none">{attackOneDamage}</span>
-                    </div>
-                    <p className="text-[11px] font-bold leading-tight">
-                      Attach up to 3 Basic Energy cards from your discard pile to your Benched Pokemon in any way you like.
-                    </p>
-                    <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2">
-                      <div className="flex -space-x-1">
-                        {[0, 1, 2].map((cost) => (
-                          <span
-                            key={`attack-two-${cost}`}
-                            className="grid size-6 place-items-center rounded-full border border-white text-xs font-black shadow"
-                            style={{
-                              backgroundColor: cost === 2 ? "#e5e7eb" : cardTypeStyle.color,
-                              color: cost === 2 ? "#111827" : cardTypeStyle.textColor ?? "#ffffff",
-                            }}
-                          >
-                            {cost === 2 ? "★" : cardTypeStyle.glyph}
-                          </span>
-                        ))}
-                      </div>
-                      <span className="text-xl font-black leading-none">{attackTwoName}</span>
-                      <span className="text-2xl font-black leading-none">{attackTwoDamage}</span>
-                    </div>
-                    <p className="text-[11px] font-bold leading-tight">
-                      During your next turn, this Pokemon can&apos;t use {attackTwoName}.
-                    </p>
+                {isExCard ? (
+                  <div className="absolute inset-x-8 bottom-7 z-30 rounded-full border-2 border-slate-900 bg-gradient-to-r from-yellow-300 via-white to-yellow-300 px-2 py-1 text-center text-[11px] font-black leading-tight text-slate-900 shadow">
+                    Pokemon ex rule: when this Pokemon ex is Knocked Out, your opponent takes 2 Prize cards.
                   </div>
+                ) : null}
 
-                  <div className="absolute inset-x-2 bottom-11 grid grid-cols-3 gap-1 border-y border-white/80 bg-white/70 px-1 py-1 text-center text-[9px] font-black uppercase text-slate-700">
-                    <span>Weakness {weakness}</span>
-                    <span>Resistance {resistance}</span>
-                    <span>Retreat {retreatCost}</span>
-                  </div>
-
-                  {isExCard ? (
-                    <div className="absolute inset-x-5 bottom-4 rounded-full border border-slate-900 bg-gradient-to-r from-yellow-300 via-white to-yellow-300 px-2 py-1 text-center text-[9px] font-black text-slate-900 shadow">
-                      Pokemon ex rule: when this Pokemon ex is Knocked Out, your opponent takes 2 Prize cards.
-                    </div>
-                  ) : null}
-
-                  <div className="absolute inset-x-2 bottom-0 flex items-center justify-between bg-white/80 px-2 py-0.5 text-[9px] font-black text-slate-700">
-                    <span>©2026 Canvas Camp</span>
-                    <span>{cardNumber} ★</span>
-                  </div>
+                <div className="absolute inset-x-3 bottom-1 z-20 flex items-center justify-between bg-white/80 px-2 py-0.5 text-[10px] font-black text-slate-700">
+                  <span>©2026 Canvas Camp</span>
+                  <span>{cardNumber} ★</span>
                 </div>
               </div>
             </div>
