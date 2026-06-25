@@ -7,6 +7,7 @@ export const GENERATED_DIR = "generated-coloring-pages";
 export type GeneratedImage = {
   downloadUrl: string;
   pathname: string;
+  renderUrl: string;
   source: "blob" | "local";
   uploadedAt: string;
   url: string;
@@ -89,6 +90,14 @@ function publicPath(pathname: string) {
   return `/${pathname}`;
 }
 
+function renderPath(url: string) {
+  if (!url.startsWith("http")) {
+    return url;
+  }
+
+  return `/api/coloring-page/image?url=${encodeURIComponent(url)}`;
+}
+
 function sortNewestFirst(images: GeneratedImage[]) {
   return images.sort(
     (left, right) =>
@@ -115,6 +124,7 @@ async function listLocalDirectoryImages(
           return {
             downloadUrl: publicPath(pathname),
             pathname,
+            renderUrl: publicPath(pathname),
             source: "local" as const,
             uploadedAt: stats.mtime.toISOString(),
             url: publicPath(pathname),
@@ -152,6 +162,7 @@ async function listLegacyLocalImages(
           return {
             downloadUrl: publicPath(pathname),
             pathname,
+            renderUrl: publicPath(pathname),
             source: "local" as const,
             uploadedAt: stats.mtime.toISOString(),
             url: publicPath(pathname),
@@ -195,6 +206,7 @@ async function saveGeneratedImageLocally({
   return {
     downloadUrl: publicPath(pathname),
     pathname,
+    renderUrl: publicPath(pathname),
     source: "local",
     uploadedAt: new Date().toISOString(),
     url: publicPath(pathname),
@@ -223,6 +235,7 @@ export async function listGeneratedImages(
     result.blobs.map((blob) => ({
       downloadUrl: blob.downloadUrl,
       pathname: blob.pathname,
+      renderUrl: renderPath(blob.url),
       source: "blob",
       uploadedAt: blob.uploadedAt.toISOString(),
       url: blob.url,
@@ -258,6 +271,7 @@ export async function saveGeneratedImage(
   return {
     downloadUrl: blob.downloadUrl,
     pathname: blob.pathname,
+    renderUrl: renderPath(blob.url),
     source: "blob",
     uploadedAt: new Date().toISOString(),
     url: blob.url,

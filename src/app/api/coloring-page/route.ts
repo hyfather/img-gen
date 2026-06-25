@@ -11,6 +11,7 @@ const OPENROUTER_IMAGES_URL = "https://openrouter.ai/api/v1/images";
 const IMAGE_MODEL = "recraft/recraft-v4.1-vector";
 const OUTPUT_FORMAT = "jpeg";
 const OUTPUT_CONTENT_TYPE = "image/jpeg";
+const SVG_CONTENT_TYPE = "image/svg+xml";
 const POSE_PROMPTS = {
   standing: "standing in a clear natural pose",
   sitting: "sitting in a cute relaxed pose",
@@ -82,28 +83,50 @@ function promptForPokemon(pokemonName: string, posePrompt: string) {
   return `Create a clean black-and-white outline drawing of ${pokemonName}, closely matching the real character design and proportions so it is immediately recognizable. Show the Pokemon ${posePrompt} that preserves its signature features, anatomy, expression, and major markings. Use bold, smooth black outlines with closed enclosed shapes so the image is suitable for coloring and easy to flood fill. Keep the inside plain white only, with no color, no shading, no gradients, no texture, and no sketch lines. Simplify only tiny surface details as needed, but retain the authentic silhouette and major visual details. Use a plain white background, no text, no scenery, no border, and output as a high-resolution PNG centered in frame.`;
 }
 
-function getImagePayload(image: OpenRouterImage) {
-  if (image.b64_json) {
-    return {
-      base64: image.b64_json,
-      contentType: OUTPUT_CONTENT_TYPE,
-      extension: "jpg",
-    };
-  }
-
-  if (image.url?.startsWith("data:image/")) {
-    const [header, base64 = ""] = image.url.split(",", 2);
-    const contentType = header.match(/^data:(image\/[^;]+)/)?.[1] ?? OUTPUT_CONTENT_TYPE;
-    const extension = contentType.includes("png")
+function imageFormatForBase64(
+  base64: string,
+  fallbackContentType = OUTPUT_CONTENT_TYPE,
+) {
+  const textPrefix = Buffer.from(base64, "base64")
+    .toString("utf8", 0, 256)
+    .trimStart()
+    .toLowerCase();
+  const contentType =
+    textPrefix.startsWith("<svg") || textPrefix.startsWith("<?xml")
+      ? SVG_CONTENT_TYPE
+      : fallbackContentType;
+  const extension = contentType.includes("svg")
+    ? "svg"
+    : contentType.includes("png")
       ? "png"
       : contentType.includes("webp")
         ? "webp"
         : "jpg";
 
+  return { contentType, extension };
+}
+
+function getImagePayload(image: OpenRouterImage) {
+  if (image.b64_json) {
+    const format = imageFormatForBase64(image.b64_json);
+
+    return {
+      base64: image.b64_json,
+      contentType: format.contentType,
+      extension: format.extension,
+    };
+  }
+
+  if (image.url?.startsWith("data:image/")) {
+    const [header, base64 = ""] = image.url.split(",", 2);
+    const fallbackContentType =
+      header.match(/^data:(image\/[^;]+)/)?.[1] ?? OUTPUT_CONTENT_TYPE;
+    const format = imageFormatForBase64(base64, fallbackContentType);
+
     return {
       base64,
-      contentType,
-      extension,
+      contentType: format.contentType,
+      extension: format.extension,
     };
   }
 
@@ -256,7 +279,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         image,
-        imageUrl: image.url,
+        imageUrl: image.renderUrl,
         model: IMAGE_MODEL,
         pokemonName,
         pose,

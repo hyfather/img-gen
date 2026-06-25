@@ -62,6 +62,7 @@ await page.route("**/api/coloring-page", async (route) => {
       image: {
         downloadUrl: mockImageUrl,
         pathname: "generated-coloring-pages/charmander/fighting/mock.png",
+        renderUrl: mockImageUrl,
         source: "local",
         uploadedAt: new Date().toISOString(),
         url: mockImageUrl,

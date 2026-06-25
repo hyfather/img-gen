@@ -39,6 +39,7 @@ type ImagesResponse = {
 type GeneratedImage = {
   downloadUrl: string;
   pathname: string;
+  renderUrl: string;
   source: "blob" | "local";
   uploadedAt: string;
   url: string;
@@ -77,7 +78,7 @@ const POSE_OPTIONS: PoseOption[] = [
 function loadImage(src: string) {
   const image = new Image();
   image.decoding = "async";
-  if (!src.startsWith("data:")) {
+  if (src.startsWith("http")) {
     image.crossOrigin = "anonymous";
   }
 
@@ -382,13 +383,13 @@ export function CanvasEditor() {
         setExistingImages(images);
 
         if (images[0]) {
-          await loadImageToCanvases(images[0].url);
+          await loadImageToCanvases(images[0].renderUrl);
 
           if (controller.signal.aborted) {
             return;
           }
 
-          setImageUrl(images[0].url);
+          setImageUrl(images[0].renderUrl);
           setStatus(
             `Showing saved ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()}`,
           );
@@ -635,8 +636,8 @@ export function CanvasEditor() {
     setStatus(`Loading saved ${selectedPokemon.name}`);
 
     try {
-      await loadImageToCanvases(image.url);
-      setImageUrl(image.url);
+      await loadImageToCanvases(image.renderUrl);
+      setImageUrl(image.renderUrl);
       setStatus(
         `Showing saved ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()}`,
       );
@@ -827,7 +828,7 @@ export function CanvasEditor() {
                     key={image.pathname}
                     aria-label={`Open saved image ${index + 1}`}
                     className={`relative size-16 shrink-0 overflow-hidden rounded-md border-2 bg-white transition ${
-                      image.url === imageUrl
+                      image.renderUrl === imageUrl
                         ? "border-slate-950"
                         : "border-slate-200 hover:border-slate-400"
                     }`}
@@ -837,7 +838,7 @@ export function CanvasEditor() {
                     <img
                       alt=""
                       className="size-full object-contain"
-                      src={image.url}
+                      src={image.renderUrl}
                     />
                   </button>
                 ))}
