@@ -1,6 +1,7 @@
 "use client";
 
 import type { CanvasBackground } from "@/lib/backgrounds";
+import { POKEMON_TYPES, TYPE_LIST, type PokemonType } from "@/lib/pokemon";
 import NextImage from "next/image";
 import {
   BringToFront,
@@ -22,15 +23,6 @@ import {
   useState,
 } from "react";
 
-type PokemonType =
-  | "fire"
-  | "water"
-  | "grass"
-  | "electric"
-  | "psychic"
-  | "ice"
-  | "fairy";
-
 type CanvasItem = {
   id: string;
   label: string;
@@ -44,6 +36,7 @@ type CanvasItem = {
   hp: number;
   move: string;
   showOutline: boolean;
+  artworkSvg?: string;
 };
 
 type PokemonTemplate = {
@@ -61,6 +54,23 @@ type CanvasPoint = {
 
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
 type PanelMode = "pokemon" | "backgrounds";
+
+type GeneratedBackground = {
+  id: string;
+  name: string;
+  src: string;
+};
+
+type GenerateResponse = {
+  name: string;
+  hp: number;
+  move: string;
+  fill: string;
+  pokemonType: PokemonType;
+  pokemonSvg: string;
+  backgroundSvg: string;
+  error?: string;
+};
 
 type Interaction =
   | {
@@ -86,63 +96,6 @@ const CANVAS_WIDTH = 1920;
 const CANVAS_HEIGHT = 1080;
 const CARD_MIN_WIDTH = 130;
 const CARD_MIN_HEIGHT = 180;
-
-const POKEMON_TYPES: Record<
-  PokemonType,
-  { name: string; abbr: string; color: string; soft: string; ink: string }
-> = {
-  fire: {
-    name: "Fire",
-    abbr: "F",
-    color: "#f97316",
-    soft: "#ffedd5",
-    ink: "#7c2d12",
-  },
-  water: {
-    name: "Water",
-    abbr: "W",
-    color: "#38bdf8",
-    soft: "#e0f2fe",
-    ink: "#075985",
-  },
-  grass: {
-    name: "Grass",
-    abbr: "G",
-    color: "#22c55e",
-    soft: "#dcfce7",
-    ink: "#14532d",
-  },
-  electric: {
-    name: "Electric",
-    abbr: "E",
-    color: "#facc15",
-    soft: "#fef9c3",
-    ink: "#713f12",
-  },
-  psychic: {
-    name: "Psychic",
-    abbr: "P",
-    color: "#ec4899",
-    soft: "#fce7f3",
-    ink: "#831843",
-  },
-  ice: {
-    name: "Ice",
-    abbr: "I",
-    color: "#67e8f9",
-    soft: "#cffafe",
-    ink: "#155e75",
-  },
-  fairy: {
-    name: "Fairy",
-    abbr: "Y",
-    color: "#fb7185",
-    soft: "#ffe4e6",
-    ink: "#881337",
-  },
-};
-
-const TYPE_LIST = Object.keys(POKEMON_TYPES) as PokemonType[];
 
 const POKEMON_TEMPLATES: PokemonTemplate[] = [
   {
@@ -288,6 +241,10 @@ function strokeWidth(item: CanvasItem, width: number | string) {
   return item.showOutline ? width : 0;
 }
 
+function svgToDataUri(svg: string) {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 function svgStroke(item: CanvasItem, width: number | string) {
   return `stroke="${strokeColor(item)}" stroke-width="${strokeWidth(
     item,
@@ -360,9 +317,12 @@ function pokemonCardSvg(item: CanvasItem) {
       8,
       radius,
     )}" fill="#ffffff" fill-opacity="0.72" ${svgStroke(item, 2)} />
-    <ellipse cx="${cx}" cy="${creatureBase}" rx="${width * 0.19}" ry="${
-      imageHeight * 0.2
-    }" fill="${typeStyle.color}" fill-opacity="0.22" />
+    ${
+      item.artworkSvg
+        ? `<image href="${svgToDataUri(item.artworkSvg)}" x="${x + width * 0.15}" y="${imageTop + imageHeight * 0.05}" width="${width * 0.7}" height="${imageHeight * 0.86}" preserveAspectRatio="xMidYMid meet" />`
+        : `<ellipse cx="${cx}" cy="${creatureBase}" rx="${width * 0.19}" ry="${
+            imageHeight * 0.2
+          }" fill="${typeStyle.color}" fill-opacity="0.22" />
     <circle cx="${cx}" cy="${creatureTop + imageHeight * 0.24}" r="${
       width * 0.15
     }" fill="${typeStyle.color}" ${svgStroke(item, 3)} />
@@ -386,7 +346,7 @@ function pokemonCardSvg(item: CanvasItem) {
       creatureTop + imageHeight * 0.36
     } Q ${cx} ${creatureTop + imageHeight * 0.43} ${cx + width * 0.045} ${
       creatureTop + imageHeight * 0.36
-    }" fill="none" stroke="#111827" stroke-width="3" stroke-linecap="round" />
+    }" fill="none" stroke="#111827" stroke-width="3" stroke-linecap="round" />`}
     <rect x="${x + width * 0.08}" y="${y + height * 0.61}" width="${
       width * 0.84
     }" height="${height * 0.11}" rx="${Math.min(
@@ -525,6 +485,11 @@ export function CanvasEditor({
   const [selectedBackgroundSrc, setSelectedBackgroundSrc] = useState(
     backgrounds[0]?.src ?? "",
   );
+  const [generatedBackgrounds, setGeneratedBackgrounds] = useState<GeneratedBackground[]>([]);
+  const [generateDescription, setGenerateDescription] = useState("");
+  const [generateType, setGenerateType] = useState<PokemonType>("electric");
+  const [generateStatus, setGenerateStatus] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [exportScale, setExportScale] = useState(2);
 
@@ -533,11 +498,17 @@ export function CanvasEditor({
     [items, selectedId],
   );
 
+  const allBackgrounds = useMemo(
+    () => [...generatedBackgrounds, ...backgrounds],
+    [backgrounds, generatedBackgrounds],
+  );
+
   const selectedBackground = useMemo(
     () =>
-      backgrounds.find((background) => background.src === selectedBackgroundSrc) ??
-      null,
-    [backgrounds, selectedBackgroundSrc],
+      allBackgrounds.find(
+        (background) => background.src === selectedBackgroundSrc,
+      ) ?? null,
+    [allBackgrounds, selectedBackgroundSrc],
   );
 
   const filteredPokemon = useMemo(
@@ -586,6 +557,69 @@ export function CanvasEditor({
           : item,
       ),
     );
+  }
+
+
+  async function generatePokemon() {
+    const description = generateDescription.trim();
+
+    if (!description) {
+      setGenerateStatus("Add a description first.");
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerateStatus("Generating a new card and background...");
+
+    try {
+      const response = await fetch("/api/generate-pokemon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description, pokemonType: generateType }),
+      });
+      const payload = (await response.json()) as GenerateResponse;
+
+      if (!response.ok) {
+        setGenerateStatus(payload.error ?? "Could not generate artwork.");
+        return;
+      }
+
+      const offset = (items.length % 7) * 34;
+      const newItem: CanvasItem = {
+        id: makeId(),
+        label: payload.name,
+        pokemonType: payload.pokemonType,
+        hp: payload.hp,
+        move: payload.move,
+        x: 700 + offset,
+        y: 230 + offset,
+        width: 300,
+        height: 410,
+        rotation: 0,
+        fill: payload.fill,
+        showOutline: true,
+        artworkSvg: payload.pokemonSvg,
+      };
+      const background = {
+        id: makeId(),
+        name: `${payload.name} Scene`,
+        src: svgToDataUri(payload.backgroundSvg),
+      };
+
+      setItems((currentItems) => [...currentItems, newItem]);
+      setGeneratedBackgrounds((currentBackgrounds) => [
+        background,
+        ...currentBackgrounds,
+      ]);
+      setSelectedId(newItem.id);
+      setSettingsCardId(newItem.id);
+      setSelectedBackgroundSrc(background.src);
+      setGenerateStatus("Generated and added to the canvas.");
+    } catch {
+      setGenerateStatus("Generation failed. Check the server logs and API key.");
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   function addPokemon(template: PokemonTemplate) {
@@ -1098,27 +1132,62 @@ export function CanvasEditor({
 
         {activePanel === "pokemon" ? (
           <>
-            <div className="grid grid-cols-4 gap-2">
-              {TYPE_LIST.map((type) => {
-                const style = POKEMON_TYPES[type];
+            <div className="grid gap-2 rounded-lg border-2 border-slate-200 bg-slate-50 p-3">
+              <label className="grid gap-1 text-xs font-black uppercase tracking-wide text-slate-500">
+                <span>Pokemon type</span>
+                <select
+                  className="h-11 rounded-lg border-2 border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none transition focus:border-slate-950"
+                  value={activeType}
+                  onChange={(event) => {
+                    const nextType = event.target.value as PokemonType;
+                    setActiveType(nextType);
+                    setGenerateType(nextType);
+                  }}
+                >
+                  {TYPE_LIST.map((type) => (
+                    <option key={type} value={type}>
+                      {POKEMON_TYPES[type].name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                return (
-                  <button
-                    key={type}
-                    className={`flex h-14 items-center justify-center rounded-lg border-2 text-sm font-black transition ${
-                      activeType === type
-                        ? "border-slate-950"
-                        : "border-transparent hover:border-slate-300"
-                    }`}
-                    style={{ background: style.soft, color: style.ink }}
-                    type="button"
-                    onClick={() => setActiveType(type)}
-                  >
-                    {style.abbr}
-                    <span className="sr-only">{style.name}</span>
-                  </button>
-                );
-              })}
+              <label className="grid gap-1 text-xs font-black uppercase tracking-wide text-slate-500">
+                <span>AI description</span>
+                <textarea
+                  className="min-h-24 resize-none rounded-lg border-2 border-slate-200 bg-white p-3 text-sm font-bold normal-case tracking-normal text-slate-950 outline-none transition focus:border-slate-950"
+                  maxLength={600}
+                  placeholder="A tiny lava turtle with crystal steam on a neon volcano playground"
+                  value={generateDescription}
+                  onChange={(event) => setGenerateDescription(event.target.value)}
+                />
+              </label>
+
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <select
+                  aria-label="Generated Pokemon type"
+                  className="h-11 rounded-lg border-2 border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none transition focus:border-slate-950"
+                  value={generateType}
+                  onChange={(event) => setGenerateType(event.target.value as PokemonType)}
+                >
+                  {TYPE_LIST.map((type) => (
+                    <option key={type} value={type}>
+                      {POKEMON_TYPES[type].name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="h-11 rounded-lg bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isGenerating}
+                  type="button"
+                  onClick={generatePokemon}
+                >
+                  {isGenerating ? "Making" : "Generate"}
+                </button>
+              </div>
+              {generateStatus ? (
+                <p className="text-xs font-bold text-slate-500">{generateStatus}</p>
+              ) : null}
             </div>
 
             <div className="grid gap-2">
@@ -1160,7 +1229,7 @@ export function CanvasEditor({
               <span className="text-base font-black">Blank</span>
             </button>
 
-            {backgrounds.map((background) => (
+            {allBackgrounds.map((background) => (
               <button
                 key={background.src}
                 className={`grid min-h-24 grid-cols-[4.5rem_1fr] items-center gap-3 rounded-lg border-2 bg-white p-2 text-left transition hover:border-slate-950 ${
@@ -1171,13 +1240,22 @@ export function CanvasEditor({
                 type="button"
                 onClick={() => setSelectedBackgroundSrc(background.src)}
               >
-                <NextImage
-                  alt=""
-                  className="aspect-video w-full rounded-md border border-slate-200 object-cover"
-                  height={81}
-                  src={background.src}
-                  width={144}
-                />
+                {background.src.startsWith("data:") ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    alt=""
+                    className="aspect-video w-full rounded-md border border-slate-200 object-cover"
+                    src={background.src}
+                  />
+                ) : (
+                  <NextImage
+                    alt=""
+                    className="aspect-video w-full rounded-md border border-slate-200 object-cover"
+                    height={81}
+                    src={background.src}
+                    width={144}
+                  />
+                )}
                 <span className="text-base font-black">{background.name}</span>
               </button>
             ))}
@@ -1504,6 +1582,17 @@ function PokemonCard({ item }: { item: CanvasItem }) {
         x={item.x + item.width * 0.08}
         y={imageTop}
       />
+      {item.artworkSvg ? (
+        <image
+          height={imageHeight * 0.86}
+          href={svgToDataUri(item.artworkSvg)}
+          preserveAspectRatio="xMidYMid meet"
+          width={item.width * 0.7}
+          x={item.x + item.width * 0.15}
+          y={imageTop + imageHeight * 0.05}
+        />
+      ) : (
+        <>
       <ellipse
         cx={centerX}
         cy={creatureBase}
@@ -1561,6 +1650,8 @@ function PokemonCard({ item }: { item: CanvasItem }) {
         strokeLinecap="round"
         strokeWidth="3"
       />
+        </>
+      )}
       <rect
         fill="#ffffff"
         fillOpacity="0.65"

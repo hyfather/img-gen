@@ -6,6 +6,7 @@ A Vercel-ready Next.js image canvas for making high-resolution, Pokemon-style ca
 
 - Floating object tray over a 1920 x 1080 dotted-grid canvas
 - Pokemon object templates grouped by type
+- OpenRouter-powered SVG Pokemon and scene background generation from user descriptions
 - PNG backgrounds loaded from `public/backgrounds`
 - Selection, drag, resize, rotate, duplicate, delete, and layer controls
 - Per-card settings menu with editable name, HP, type, move, color, and outline
@@ -17,6 +18,15 @@ A Vercel-ready Next.js image canvas for making high-resolution, Pokemon-style ca
 Add PNG files to `public/backgrounds`. The app lists every `.png` in that folder as a selectable canvas background.
 
 ## Run locally
+
+Create a root `.env.local` file with your OpenRouter API key before using AI generation:
+
+```bash
+OPENROUTER_API_KEY=your_openrouter_key
+# Optional: OPENROUTER_MODEL=google/gemini-2.5-flash
+```
+
+Then start the app:
 
 ```bash
 npm run dev
