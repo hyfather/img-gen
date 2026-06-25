@@ -8,6 +8,7 @@ import {
   Layers,
   Loader2,
   PaintBucket,
+  Palette,
   Plus,
   Sparkles,
   Undo2,
@@ -56,6 +57,13 @@ type PoseOption = {
   label: string;
 };
 
+type PaintOption = {
+  id: string;
+  label: string;
+  color: string;
+  kind?: "solid" | "premium-gold" | "premium-silver";
+};
+
 const CANVAS_SIZE = 1024;
 const OUTLINE_DILATION_RADIUS = 2;
 const TAP_SEARCH_RADIUS = 12;
@@ -64,17 +72,74 @@ const MODEL_OPTIONS = [
   "google/gemini-2.5-flash-image",
   "google/gemini-3-pro-image-preview",
 ];
-const SWATCHES = [
-  "#fef08a",
-  "#fb923c",
-  "#38bdf8",
-  "#22c55e",
-  "#f472b6",
-  "#a78bfa",
-  "#f87171",
-  "#94a3b8",
-  "#ffffff",
+const COLOR_PALETTES: { label: string; colors: PaintOption[] }[] = [
+  {
+    label: "Signature",
+    colors: [
+      { id: "citrine-bolt", label: "Citrine bolt", color: "#F6C945" },
+      { id: "apricot-flare", label: "Apricot flare", color: "#F58A5C" },
+      { id: "coral-pulse", label: "Coral pulse", color: "#E95B63" },
+      { id: "peony-glow", label: "Peony glow", color: "#E87DB2" },
+      { id: "orchid-aura", label: "Orchid aura", color: "#9B7BEA" },
+      { id: "lapis-current", label: "Lapis current", color: "#4F8FEA" },
+      { id: "aqua-spark", label: "Aqua spark", color: "#41C7C7" },
+      { id: "verdant-leaf", label: "Verdant leaf", color: "#62B66A" },
+    ],
+  },
+  {
+    label: "Elemental",
+    colors: [
+      { id: "ember-clay", label: "Ember clay", color: "#B85C38" },
+      { id: "lava-rose", label: "Lava rose", color: "#D84C4C" },
+      { id: "glacier-blue", label: "Glacier blue", color: "#7BB8E8" },
+      { id: "tidal-indigo", label: "Tidal indigo", color: "#3569B7" },
+      { id: "fern-shadow", label: "Fern shadow", color: "#3F7D52" },
+      { id: "moss-gold", label: "Moss gold", color: "#9C8F3A" },
+      { id: "sandstone", label: "Sandstone", color: "#C9A26A" },
+      { id: "basalt", label: "Basalt", color: "#46515E" },
+    ],
+  },
+  {
+    label: "Atmosphere",
+    colors: [
+      { id: "porcelain", label: "Porcelain", color: "#F8F5EF" },
+      { id: "warm-ivory", label: "Warm ivory", color: "#EFE4D2" },
+      { id: "petal-mist", label: "Petal mist", color: "#F3C9D8" },
+      { id: "peach-veil", label: "Peach veil", color: "#F2C3A3" },
+      { id: "mint-haze", label: "Mint haze", color: "#B9DDC0" },
+      { id: "sea-glass", label: "Sea glass", color: "#A9D8D4" },
+      { id: "moon-lilac", label: "Moon lilac", color: "#C9C2E8" },
+      { id: "ink-wash", label: "Ink wash", color: "#202833" },
+    ],
+  },
+  {
+    label: "Premium",
+    colors: [
+      {
+        id: "premium-gold",
+        label: "Holographic champagne gold",
+        color: "#D8B15D",
+        kind: "premium-gold",
+      },
+      {
+        id: "premium-silver",
+        label: "Liquid platinum silver",
+        color: "#C9D1DA",
+        kind: "premium-silver",
+      },
+    ],
+  },
 ];
+const DEFAULT_PAINT = COLOR_PALETTES[0].colors[0];
+const INITIAL_RECENT_PAINTS = [
+  DEFAULT_PAINT,
+  COLOR_PALETTES[0].colors[2],
+  COLOR_PALETTES[0].colors[5],
+  COLOR_PALETTES[1].colors[4],
+  COLOR_PALETTES[2].colors[0],
+  COLOR_PALETTES[3].colors[0],
+];
+const RECENT_PAINT_LIMIT = 6;
 
 const CARD_BORDER_SWATCHES = ["#facc15", "#f97316", "#38bdf8", "#22c55e", "#a78bfa", "#f8fafc", "#0f172a"];
 const TYPE_ICON_STYLES: Record<PokemonType, { label: string; glyph: string; color: string; textColor?: string }> = {
@@ -139,6 +204,49 @@ function hexToRgba(fillColor: string) {
     b: value & 255,
     a: 255,
   };
+}
+
+function getPaintPreview(paint: PaintOption) {
+  if (paint.kind === "premium-gold") {
+    return "linear-gradient(135deg, #9c7334 0%, #d8b15d 28%, #fff6c7 48%, #c99844 66%, #f4df9f 100%)";
+  }
+
+  if (paint.kind === "premium-silver") {
+    return "linear-gradient(135deg, #7e8b99 0%, #c9d1da 30%, #fafcff 50%, #aab4bf 68%, #eef2f7 100%)";
+  }
+
+  return paint.color;
+}
+
+function getPaintRgba(paint: PaintOption, x: number, y: number) {
+  if (paint.kind === "premium-gold" || paint.kind === "premium-silver") {
+    const base =
+      paint.kind === "premium-gold"
+        ? { r: 216, g: 177, b: 93 }
+        : { r: 201, g: 209, b: 218 };
+    const highlight =
+      paint.kind === "premium-gold"
+        ? { r: 255, g: 246, b: 199 }
+        : { r: 250, g: 252, b: 255 };
+    const shadow =
+      paint.kind === "premium-gold"
+        ? { r: 156, g: 115, b: 52 }
+        : { r: 126, g: 139, b: 153 };
+    const shimmer =
+      (Math.sin((x + y) / 42) + Math.sin((x - y) / 86) + 2) / 4;
+    const sparkle = (x * 3 + y * 5) % 211 < 3 ? 0.18 : 0;
+    const mix = Math.min(1, shimmer * 0.62 + sparkle);
+    const low = shimmer < 0.22 ? shadow : base;
+
+    return {
+      r: Math.round(low.r + (highlight.r - low.r) * mix),
+      g: Math.round(low.g + (highlight.g - low.g) * mix),
+      b: Math.round(low.b + (highlight.b - low.b) * mix),
+      a: 255,
+    };
+  }
+
+  return hexToRgba(paint.color);
 }
 
 async function readGenerateResponse(response: Response): Promise<GenerateResponse> {
@@ -278,7 +386,11 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonOption>(
     POKEMON_TYPE_GROUPS[0].pokemon[0],
   );
-  const [fillColor, setFillColor] = useState(SWATCHES[0]);
+  const [selectedPaint, setSelectedPaint] = useState<PaintOption>(DEFAULT_PAINT);
+  const [recentPaints, setRecentPaints] =
+    useState<PaintOption[]>(INITIAL_RECENT_PAINTS);
+  const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
+  const [customColor, setCustomColor] = useState("#F6C945");
   const [selectedPose, setSelectedPose] = useState(POSE_OPTIONS[0].id);
   const [imageUrl, setImageUrl] = useState("");
   const [model, setModel] = useState(DEFAULT_MODEL);
@@ -528,7 +640,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   }
 
   const floodFill = useCallback(
-    (startX: number, startY: number, nextFillColor: string) => {
+    (startX: number, startY: number, nextPaint: PaintOption) => {
       const maskCanvas = maskCanvasRef.current;
       const colorCanvas = colorCanvasRef.current;
       const boundaryMask = boundaryMaskRef.current;
@@ -564,7 +676,6 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
       undoStackRef.current.push(colorImage);
       setCanUndo(true);
 
-      const fill = hexToRgba(nextFillColor);
       const visited = new Uint8Array(CANVAS_SIZE * CANVAS_SIZE);
       const stack = new Int32Array(CANVAS_SIZE * CANVAS_SIZE);
       let stackLength = 1;
@@ -580,12 +691,14 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
           continue;
         }
 
+        const x = pixelIndex % CANVAS_SIZE;
+        const y = Math.floor(pixelIndex / CANVAS_SIZE);
+        const fill = getPaintRgba(nextPaint, x, y);
+
         colorImage.data[dataIndex] = fill.r;
         colorImage.data[dataIndex + 1] = fill.g;
         colorImage.data[dataIndex + 2] = fill.b;
         colorImage.data[dataIndex + 3] = fill.a;
-
-        const x = pixelIndex % CANVAS_SIZE;
         const left = pixelIndex - 1;
         const right = pixelIndex + 1;
         const up = pixelIndex - CANVAS_SIZE;
@@ -621,11 +734,19 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     [imageUrl],
   );
 
+  function selectPaint(paint: PaintOption) {
+    setSelectedPaint(paint);
+    setRecentPaints((currentPaints) => [
+      paint,
+      ...currentPaints.filter((currentPaint) => currentPaint.id !== paint.id),
+    ].slice(0, RECENT_PAINT_LIMIT));
+  }
+
   function handleCanvasPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = getCanvasPoint(event);
-    floodFill(point.x, point.y, fillColor);
+    floodFill(point.x, point.y, selectedPaint);
   }
 
   function undoFill() {
@@ -872,25 +993,94 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {SWATCHES.map((swatch) => (
-                <button
-                  key={swatch}
-                  aria-label={`Use color ${swatch}`}
-                  className={`size-10 rounded-lg border-2 ${
-                    fillColor === swatch ? "border-slate-950" : "border-white"
-                  } shadow-sm ring-1 ring-slate-200`}
-                  style={{ backgroundColor: swatch }}
-                  type="button"
-                  onClick={() => setFillColor(swatch)}
-                />
-              ))}
-              <input
-                aria-label="Custom color"
-                className="size-11 rounded-lg border-2 border-slate-200 bg-white p-1"
-                type="color"
-                value={fillColor}
-                onChange={(event) => setFillColor(event.target.value)}
-              />
+              <div className="relative">
+                <div className="flex h-11 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 shadow-sm">
+                  {recentPaints.map((paint) => (
+                    <button
+                      key={paint.id}
+                      aria-label={`Use recent color ${paint.label}`}
+                      title={paint.label}
+                      className={`size-7 rounded-full border-2 transition hover:scale-105 ${
+                        selectedPaint.id === paint.id
+                          ? "border-slate-950"
+                          : "border-white"
+                      } ring-1 ring-slate-200`}
+                      style={{ background: getPaintPreview(paint) }}
+                      type="button"
+                      onClick={() => selectPaint(paint)}
+                    />
+                  ))}
+                  <button
+                    aria-expanded={isColorPickerOpen}
+                    aria-label="Open color palette"
+                    className="ml-1 flex h-8 items-center gap-2 rounded-full bg-slate-950 px-3 text-xs font-black text-white"
+                    type="button"
+                    onClick={() => setIsColorPickerOpen((isOpen) => !isOpen)}
+                  >
+                    <span
+                      className="size-4 rounded-full ring-1 ring-white/40"
+                      style={{ background: getPaintPreview(selectedPaint) }}
+                    />
+                    <Palette aria-hidden="true" size={15} />
+                  </button>
+                </div>
+
+                {isColorPickerOpen ? (
+                  <div className="absolute right-0 top-12 z-20 w-[min(88vw,430px)] rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                          Palette
+                        </p>
+                        <p className="text-sm font-black text-slate-950">
+                          {selectedPaint.label}
+                        </p>
+                      </div>
+                      <input
+                        aria-label="Custom color"
+                        className="size-9 rounded-full border border-slate-200 bg-white p-1"
+                        type="color"
+                        value={customColor}
+                        onChange={(event) => {
+                          const nextColor = event.target.value;
+                          setCustomColor(nextColor);
+                          selectPaint({
+                            id: `custom-${nextColor}`,
+                            label: "Custom color",
+                            color: nextColor,
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="grid gap-3">
+                      {COLOR_PALETTES.map((palette) => (
+                        <div key={palette.label} className="grid gap-1.5">
+                          <p className="px-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                            {palette.label}
+                          </p>
+                          <div className="grid grid-cols-8 gap-1.5">
+                            {palette.colors.map((paint) => (
+                              <button
+                                key={paint.id}
+                                aria-label={`Use ${paint.label}`}
+                                title={paint.label}
+                                className={`aspect-square rounded-full border-2 transition hover:scale-105 ${
+                                  selectedPaint.id === paint.id
+                                    ? "border-slate-950"
+                                    : "border-white"
+                                } shadow-sm ring-1 ring-slate-200`}
+                                style={{ background: getPaintPreview(paint) }}
+                                type="button"
+                                onClick={() => selectPaint(paint)}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               <button
                 aria-label="Undo"
                 className="grid size-11 place-items-center rounded-lg border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
