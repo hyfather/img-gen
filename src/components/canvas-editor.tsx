@@ -10,12 +10,14 @@ import {
   Image as ImageIcon,
   Layers,
   MousePointer2,
+  Plus,
   SendToBack,
   Settings,
   Trash2,
 } from "lucide-react";
 import {
   PointerEvent as ReactPointerEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -177,6 +179,8 @@ const POKEMON_TEMPLATES: PokemonTemplate[] = [
 ];
 
 const DEFAULT_ITEMS: CanvasItem[] = [];
+const LIGHT_EXPORT_SCALES = [1, 2];
+const FULL_EXPORT_SCALES = [1, 2, 4];
 
 const SWATCHES = [
   "#fef08a",
@@ -691,12 +695,23 @@ function drawDotGrid(context: CanvasRenderingContext2D) {
   }
 }
 
+function nextFrame() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
+
 export function CanvasEditor({
   backgrounds,
 }: {
   backgrounds: CanvasBackground[];
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const pendingItemUpdateRef = useRef<{
+    id: string;
+    patch: Partial<CanvasItem>;
+  } | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const [items, setItems] = useState<CanvasItem[]>(DEFAULT_ITEMS);
   const [selectedId, setSelectedId] = useState("");
   const [settingsCardId, setSettingsCardId] = useState("");
@@ -705,7 +720,9 @@ export function CanvasEditor({
   const [activeType, setActiveType] = useState<PokemonType>("electric");
   const [selectedBackgroundSrc, setSelectedBackgroundSrc] = useState("");
   const [showGrid, setShowGrid] = useState(true);
-  const [exportScale, setExportScale] = useState(2);
+  const [exportScale, setExportScale] = useState(1);
+  const [preferLightExport, setPreferLightExport] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedId) ?? null,
@@ -728,33 +745,40 @@ export function CanvasEditor({
   );
 
   const settingsOpen = selectedItem?.id === settingsCardId;
+  const exportScales = useMemo(
+    () => (preferLightExport ? LIGHT_EXPORT_SCALES : FULL_EXPORT_SCALES),
+    [preferLightExport],
+  );
 
-  function toCanvasPoint(event: PointerEvent | ReactPointerEvent): CanvasPoint {
-    const svg = svgRef.current;
+  const toCanvasPoint = useCallback(
+    (event: PointerEvent | ReactPointerEvent): CanvasPoint => {
+      const svg = svgRef.current;
 
-    if (!svg) {
-      return { x: 0, y: 0 };
-    }
+      if (!svg) {
+        return { x: 0, y: 0 };
+      }
 
-    const point = svg.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
 
-    const matrix = svg.getScreenCTM();
+      const matrix = svg.getScreenCTM();
 
-    if (!matrix) {
-      return { x: 0, y: 0 };
-    }
+      if (!matrix) {
+        return { x: 0, y: 0 };
+      }
 
-    const transformed = point.matrixTransform(matrix.inverse());
+      const transformed = point.matrixTransform(matrix.inverse());
 
-    return {
-      x: transformed.x,
-      y: transformed.y,
-    };
-  }
+      return {
+        x: transformed.x,
+        y: transformed.y,
+      };
+    },
+    [],
+  );
 
-  function updateItem(id: string, patch: Partial<CanvasItem>) {
+  const updateItem = useCallback((id: string, patch: Partial<CanvasItem>) => {
     setItems((currentItems) =>
       currentItems.map((item) =>
         item.id === id
@@ -765,7 +789,42 @@ export function CanvasEditor({
           : item,
       ),
     );
-  }
+  }, []);
+
+  const flushScheduledItemUpdate = useCallback(() => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    const update = pendingItemUpdateRef.current;
+    pendingItemUpdateRef.current = null;
+
+    if (update) {
+      updateItem(update.id, update.patch);
+    }
+  }, [updateItem]);
+
+  const scheduleItemUpdate = useCallback(
+    (id: string, patch: Partial<CanvasItem>) => {
+      pendingItemUpdateRef.current = { id, patch };
+
+      if (animationFrameRef.current !== null) {
+        return;
+      }
+
+      animationFrameRef.current = requestAnimationFrame(() => {
+        animationFrameRef.current = null;
+        const update = pendingItemUpdateRef.current;
+        pendingItemUpdateRef.current = null;
+
+        if (update) {
+          updateItem(update.id, update.patch);
+        }
+      });
+    },
+    [updateItem],
+  );
 
   function addPokemon(template: PokemonTemplate) {
     const offset = (items.length % 5) * 48;
@@ -797,6 +856,7 @@ export function CanvasEditor({
 
   function beginDrag(event: ReactPointerEvent<SVGGElement>, item: CanvasItem) {
     event.stopPropagation();
+    event.preventDefault();
     const point = toCanvasPoint(event);
 
     setSelectedId(item.id);
@@ -810,11 +870,12 @@ export function CanvasEditor({
   }
 
   function beginResize(
-    event: ReactPointerEvent<SVGCircleElement>,
+    event: ReactPointerEvent<SVGElement>,
     item: CanvasItem,
     handle: ResizeHandle,
   ) {
     event.stopPropagation();
+    event.preventDefault();
     setSelectedId(item.id);
     setInteraction({
       mode: "resize",
@@ -825,10 +886,11 @@ export function CanvasEditor({
   }
 
   function beginRotate(
-    event: ReactPointerEvent<SVGCircleElement>,
+    event: ReactPointerEvent<SVGElement>,
     item: CanvasItem,
   ) {
     event.stopPropagation();
+    event.preventDefault();
     setSelectedId(item.id);
     setInteraction({
       mode: "rotate",
@@ -908,55 +970,105 @@ export function CanvasEditor({
   }
 
   async function downloadPng() {
-    const canvas = document.createElement("canvas");
-    canvas.width = CANVAS_WIDTH * exportScale;
-    canvas.height = CANVAS_HEIGHT * exportScale;
-
-    const context = canvas.getContext("2d");
-
-    if (!context) {
+    if (isExporting) {
       return;
     }
 
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = "high";
-    context.scale(exportScale, exportScale);
+    setIsExporting(true);
+    await nextFrame();
 
-    if (selectedBackground) {
-      const backgroundImage = await loadImage(selectedBackground.src);
-      drawCoverImage(context, backgroundImage);
-    } else {
-      context.fillStyle = "#fbfcff";
-      context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    }
+    const targetScale = preferLightExport ? Math.min(exportScale, 2) : exportScale;
+    const canvas = document.createElement("canvas");
+    canvas.width = CANVAS_WIDTH * targetScale;
+    canvas.height = CANVAS_HEIGHT * targetScale;
 
-    if (showGrid) {
-      drawDotGrid(context);
-    }
+    try {
+      const context = canvas.getContext("2d");
 
-    const itemSvgBlob = new Blob([exportItemsSvg(items)], {
-      type: "image/svg+xml",
-    });
-    const itemSvgUrl = URL.createObjectURL(itemSvgBlob);
-    const itemImage = await loadImage(itemSvgUrl);
-    context.drawImage(itemImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    URL.revokeObjectURL(itemSvgUrl);
-
-    canvas.toBlob((blob) => {
-      if (!blob) {
+      if (!context) {
         return;
       }
 
-      const downloadUrl = URL.createObjectURL(blob);
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = targetScale > 1 ? "high" : "medium";
+      context.scale(targetScale, targetScale);
+
+      if (selectedBackground) {
+        const backgroundImage = await loadImage(selectedBackground.src);
+        drawCoverImage(context, backgroundImage);
+      } else {
+        context.fillStyle = "#fbfcff";
+        context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      }
+
+      if (showGrid) {
+        drawDotGrid(context);
+      }
+
+      const itemSvgBlob = new Blob([exportItemsSvg(items)], {
+        type: "image/svg+xml",
+      });
+      const itemSvgUrl = URL.createObjectURL(itemSvgBlob);
+
+      try {
+        const itemImage = await loadImage(itemSvgUrl);
+        context.drawImage(itemImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      } finally {
+        URL.revokeObjectURL(itemSvgUrl);
+      }
+
+      const pngBlob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), "image/png");
+      });
+
+      if (!pngBlob) {
+        return;
+      }
+
+      const downloadUrl = URL.createObjectURL(pngBlob);
       const link = document.createElement("a");
       link.href = downloadUrl;
-      link.download = `pokemon-canvas-${CANVAS_WIDTH * exportScale}x${
-        CANVAS_HEIGHT * exportScale
+      link.download = `pokemon-canvas-${CANVAS_WIDTH * targetScale}x${
+        CANVAS_HEIGHT * targetScale
       }.png`;
       link.click();
       URL.revokeObjectURL(downloadUrl);
-    }, "image/png");
+    } finally {
+      setIsExporting(false);
+    }
   }
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1180px), (pointer: coarse)");
+    const navigatorWithMemory = navigator as Navigator & {
+      deviceMemory?: number;
+    };
+
+    function updateExportPreference() {
+      const lowMemoryDevice =
+        typeof navigatorWithMemory.deviceMemory === "number" &&
+        navigatorWithMemory.deviceMemory <= 4;
+      const nextPreferLightExport = mediaQuery.matches || lowMemoryDevice;
+
+      setPreferLightExport(nextPreferLightExport);
+      setExportScale((currentScale) =>
+        nextPreferLightExport ? Math.min(currentScale, 2) : currentScale,
+      );
+    }
+
+    updateExportPreference();
+    mediaQuery.addEventListener("change", updateExportPreference);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateExportPreference);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      flushScheduledItemUpdate();
+    };
+  }, [flushScheduledItemUpdate]);
 
   useEffect(() => {
     if (!interaction) {
@@ -980,7 +1092,7 @@ export function CanvasEditor({
           CANVAS_HEIGHT - activeInteraction.start.height * 0.3,
         );
 
-        updateItem(activeInteraction.id, {
+        scheduleItemUpdate(activeInteraction.id, {
           x: nextX,
           y: nextY,
         });
@@ -1031,7 +1143,7 @@ export function CanvasEditor({
           nextY = bottom - nextHeight;
         }
 
-        updateItem(activeInteraction.id, {
+        scheduleItemUpdate(activeInteraction.id, {
           x: nextX,
           y: nextY,
           width: nextWidth,
@@ -1045,13 +1157,14 @@ export function CanvasEditor({
           (Math.atan2(point.y - center.y, point.x - center.x) * 180) / Math.PI +
           90;
 
-        updateItem(activeInteraction.id, {
+        scheduleItemUpdate(activeInteraction.id, {
           rotation: Math.round(angle),
         });
       }
     }
 
     function handlePointerUp() {
+      flushScheduledItemUpdate();
       setInteraction(null);
     }
 
@@ -1062,7 +1175,12 @@ export function CanvasEditor({
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
-  }, [interaction]);
+  }, [
+    flushScheduledItemUpdate,
+    interaction,
+    scheduleItemUpdate,
+    toCanvasPoint,
+  ]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -1092,12 +1210,12 @@ export function CanvasEditor({
   });
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#f4f7fb] text-slate-950">
-      <div className="absolute inset-0 p-3 md:p-5">
+    <main className="grid min-h-screen min-h-[100svh] gap-3 overflow-x-hidden overflow-y-auto bg-[#f4f7fb] p-3 text-slate-950 md:h-[100svh] md:grid-cols-2 md:grid-rows-[minmax(22rem,1fr)_minmax(0,22rem)_auto] md:overflow-hidden lg:grid-rows-[minmax(24rem,1fr)_minmax(0,18rem)_auto] xl:grid-cols-[20rem_minmax(0,1fr)_20rem] xl:grid-rows-[minmax(0,1fr)_auto] xl:p-4">
+      <div className="relative h-[56svh] min-h-[22rem] overflow-hidden rounded-lg md:col-span-2 md:h-full md:min-h-0 xl:col-span-1 xl:col-start-2 xl:row-start-1">
         <svg
           ref={svgRef}
           aria-label="Image canvas"
-          className="h-full w-full rounded-lg border-2 border-slate-200 bg-white shadow-sm"
+          className="h-full w-full touch-none select-none rounded-lg border-2 border-slate-200 bg-white shadow-sm"
           viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
         >
           <defs>
@@ -1187,30 +1305,50 @@ export function CanvasEditor({
                       y1={item.y}
                       y2={item.y - 48}
                     />
-                    <circle
+                    <g
                       className="cursor-grab"
-                      cx={center.x}
-                      cy={item.y - 58}
-                      fill="#ffffff"
-                      r="15"
-                      stroke="#2563eb"
-                      strokeWidth="5"
                       onPointerDown={(event) => beginRotate(event, item)}
-                    />
-                    {handlePoints.map((handle) => (
+                    >
                       <circle
-                        key={handle.key}
-                        className="cursor-nwse-resize"
-                        cx={handle.x}
-                        cy={handle.y}
+                        cx={center.x}
+                        cy={item.y - 58}
+                        fill="transparent"
+                        r="34"
+                      />
+                      <circle
+                        cx={center.x}
+                        cy={item.y - 58}
                         fill="#ffffff"
-                        r="13"
+                        pointerEvents="none"
+                        r="15"
                         stroke="#2563eb"
                         strokeWidth="5"
+                      />
+                    </g>
+                    {handlePoints.map((handle) => (
+                      <g
+                        key={handle.key}
+                        className="cursor-nwse-resize"
                         onPointerDown={(event) =>
                           beginResize(event, item, handle.key)
                         }
-                      />
+                      >
+                        <circle
+                          cx={handle.x}
+                          cy={handle.y}
+                          fill="transparent"
+                          r="34"
+                        />
+                        <circle
+                          cx={handle.x}
+                          cy={handle.y}
+                          fill="#ffffff"
+                          pointerEvents="none"
+                          r="13"
+                          stroke="#2563eb"
+                          strokeWidth="5"
+                        />
+                      </g>
                     ))}
                     <g
                       aria-label={`${item.label} settings`}
@@ -1250,7 +1388,7 @@ export function CanvasEditor({
         </svg>
       </div>
 
-      <aside className="absolute left-4 top-4 z-10 flex max-h-[calc(100vh-2rem)] w-[min(21rem,calc(100vw-2rem))] flex-col gap-3 overflow-auto rounded-lg border-2 border-slate-950 bg-white/95 p-3 shadow-[0_18px_60px_rgba(15,23,42,0.18)] backdrop-blur md:left-6 md:top-6">
+      <aside className="z-10 flex min-h-0 flex-col gap-3 overflow-auto rounded-lg border-2 border-slate-950 bg-white p-3 shadow-sm md:col-start-1 md:row-start-2 xl:col-start-1 xl:row-start-1">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-black tracking-tight">Canvas Camp</h1>
@@ -1301,6 +1439,7 @@ export function CanvasEditor({
                         : "border-transparent hover:border-slate-300"
                     }`}
                     style={{ background: style.soft, color: style.ink }}
+                    aria-pressed={activeType === type}
                     type="button"
                     onClick={() => setActiveType(type)}
                   >
@@ -1332,7 +1471,8 @@ export function CanvasEditor({
                     </span>
                   </span>
                   <span className="rounded-md bg-slate-950 px-2 py-1 text-xs font-black text-white">
-                    Add
+                    <Plus aria-hidden="true" size={15} strokeWidth={3} />
+                    <span className="sr-only">Add</span>
                   </span>
                 </button>
               ))}
@@ -1378,7 +1518,7 @@ export function CanvasEditor({
         )}
       </aside>
 
-      <section className="absolute right-4 top-4 z-10 flex w-[min(20rem,calc(100vw-2rem))] flex-col gap-3 rounded-lg border-2 border-slate-950 bg-white/95 p-3 shadow-[0_18px_60px_rgba(15,23,42,0.16)] backdrop-blur md:right-6 md:top-6">
+      <section className="z-10 flex min-h-0 flex-col gap-3 overflow-auto rounded-lg border-2 border-slate-950 bg-white p-3 shadow-sm md:col-start-2 md:row-start-2 xl:col-start-3 xl:row-start-1">
         <div className="grid grid-cols-[1fr_auto] items-center gap-3">
           <div>
             <h2 className="text-lg font-black tracking-tight">Settings</h2>
@@ -1388,7 +1528,7 @@ export function CanvasEditor({
           </div>
           <div className="flex gap-1">
             <button
-              className="grid size-10 place-items-center rounded-lg border-2 border-slate-200 bg-white transition hover:border-slate-950 disabled:opacity-40"
+              className="grid size-11 place-items-center rounded-lg border-2 border-slate-200 bg-white transition hover:border-slate-950 disabled:opacity-40"
               disabled={!selectedItem}
               title="Copy"
               type="button"
@@ -1398,7 +1538,7 @@ export function CanvasEditor({
               <span className="sr-only">Copy</span>
             </button>
             <button
-              className="grid size-10 place-items-center rounded-lg border-2 border-slate-200 bg-white transition hover:border-red-500 hover:text-red-600 disabled:opacity-40"
+              className="grid size-11 place-items-center rounded-lg border-2 border-slate-200 bg-white transition hover:border-red-500 hover:text-red-600 disabled:opacity-40"
               disabled={!selectedItem}
               title="Delete"
               type="button"
@@ -1500,6 +1640,7 @@ export function CanvasEditor({
                         : "border-transparent hover:border-slate-300"
                     }`}
                     style={{ background: style.soft, color: style.ink }}
+                    aria-pressed={selectedItem.pokemonType === type}
                     type="button"
                     onClick={() =>
                       updateItem(selectedItem.id, { pokemonType: type })
@@ -1534,7 +1675,7 @@ export function CanvasEditor({
               <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                 Color
               </span>
-              <div className="grid grid-cols-[repeat(9,1fr)] gap-1">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(2.75rem,1fr))] gap-1.5">
                 {SWATCHES.map((swatch) => (
                   <button
                     key={swatch}
@@ -1552,7 +1693,7 @@ export function CanvasEditor({
               </div>
               <input
                 aria-label="Custom color"
-                className="h-10 w-full rounded-lg border-2 border-slate-200 bg-white p-1"
+                className="h-11 w-full rounded-lg border-2 border-slate-200 bg-white p-1"
                 type="color"
                 value={selectedItem.fill}
                 onChange={(event) =>
@@ -1589,13 +1730,14 @@ export function CanvasEditor({
         )}
       </section>
 
-      <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-lg border-2 border-slate-950 bg-white/95 p-2 shadow-[0_14px_40px_rgba(15,23,42,0.16)] backdrop-blur md:bottom-6">
+      <div className="z-10 flex max-w-full flex-wrap items-center justify-center gap-2 justify-self-center rounded-lg border-2 border-slate-950 bg-white p-2 shadow-sm md:col-span-2 md:row-start-3 xl:col-span-1 xl:col-start-2 xl:row-start-2">
         <button
           className={`grid size-11 place-items-center rounded-lg border-2 transition ${
             showGrid
               ? "border-slate-950 bg-slate-950 text-white"
               : "border-slate-200 bg-white text-slate-950 hover:border-slate-950"
           }`}
+          aria-pressed={showGrid}
           title="Grid"
           type="button"
           onClick={() => setShowGrid((current) => !current)}
@@ -1605,7 +1747,7 @@ export function CanvasEditor({
         </button>
 
         <div className="flex rounded-lg bg-slate-100 p-1">
-          {[1, 2, 4].map((scale) => (
+          {exportScales.map((scale) => (
             <button
               key={scale}
               className={`h-9 w-11 rounded-md text-sm font-black transition ${
@@ -1622,12 +1764,13 @@ export function CanvasEditor({
         </div>
 
         <button
-          className="flex h-11 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-blue-700"
+          className="flex h-11 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-blue-700 disabled:opacity-60"
+          disabled={isExporting}
           type="button"
           onClick={downloadPng}
         >
           <Download aria-hidden="true" size={18} strokeWidth={2.8} />
-          PNG
+          {isExporting ? "Saving" : "PNG"}
         </button>
         <div className="hidden items-center gap-1 pl-1 text-xs font-black uppercase tracking-wide text-slate-500 md:flex">
           <Layers aria-hidden="true" size={15} strokeWidth={2.6} />
