@@ -6,8 +6,9 @@ A Vercel-ready Next.js coloring app that generates Pokemon outline PNGs with Ope
 
 - A 50-Pokemon category tree grouped by Pokemon type
 - A staged workflow: choose Pokemon, choose pose, then generate
-- OpenRouter image generation through `google/gemini-2.5-flash-image` by default
-- Generated PNG assets written to `public/generated-coloring-pages`
+- OpenRouter image generation through a hardcoded `google/gemini-2.5-flash-lite` model
+- Generated image assets stored in Vercel Blob, with a local `public/generated-coloring-pages` fallback
+- A saved-variations rail for previously generated Pokemon and pose combinations
 - Layered canvas coloring with mask, fill, and outline canvases
 - Flood fill bounded by dark anti-aliased outline pixels
 - Color swatches, custom color picker, undo, clear, regenerate, and PNG export
@@ -19,12 +20,8 @@ Create a local env file with an OpenRouter key:
 
 ```bash
 OPENROUTER_API_KEY=...
-```
-
-You can swap the image model without code changes:
-
-```bash
-OPENROUTER_IMAGE_MODEL=google/gemini-3-pro-image-preview
+PUBLIC_READ_WRITE_TOKEN=...
+PUBLIC_STORE_ID=...
 ```
 
 ## Run locally
