@@ -3,15 +3,18 @@
 import {
   Download,
   Eraser,
+  Images,
   Image as ImageIcon,
   Loader2,
   PaintBucket,
+  Plus,
   Sparkles,
   Undo2,
 } from "lucide-react";
 import {
   PointerEvent as ReactPointerEvent,
   useCallback,
+  useEffect,
   useRef,
   useState,
 } from "react";
@@ -23,9 +26,22 @@ import {
 } from "@/lib/pokemon";
 
 type GenerateResponse = {
+  image?: GeneratedImage;
   imageUrl?: string;
   error?: string;
-  model?: string;
+};
+
+type ImagesResponse = {
+  images?: GeneratedImage[];
+  error?: string;
+};
+
+type GeneratedImage = {
+  downloadUrl: string;
+  pathname: string;
+  source: "blob" | "local";
+  uploadedAt: string;
+  url: string;
 };
 
 type PoseOption = {
@@ -36,11 +52,6 @@ type PoseOption = {
 const CANVAS_SIZE = 1024;
 const OUTLINE_DILATION_RADIUS = 2;
 const TAP_SEARCH_RADIUS = 12;
-const DEFAULT_MODEL = "google/gemini-2.5-flash-image";
-const MODEL_OPTIONS = [
-  "google/gemini-2.5-flash-image",
-  "google/gemini-3-pro-image-preview",
-];
 const SWATCHES = [
   "#fef08a",
   "#fb923c",
@@ -66,6 +77,9 @@ const POSE_OPTIONS: PoseOption[] = [
 function loadImage(src: string) {
   const image = new Image();
   image.decoding = "async";
+  if (!src.startsWith("data:")) {
+    image.crossOrigin = "anonymous";
+  }
 
   return new Promise<HTMLImageElement>((resolve, reject) => {
     image.onload = () => resolve(image);
@@ -111,6 +125,115 @@ async function readGenerateResponse(response: Response): Promise<GenerateRespons
   }
 }
 
+async function readImagesResponse(response: Response): Promise<ImagesResponse> {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return {
+      error: `Server returned an empty response (${response.status}).`,
+    };
+  }
+
+  try {
+    return JSON.parse(text) as ImagesResponse;
+  } catch {
+    return {
+      error: text.slice(0, 240) || "Server returned a non-JSON response.",
+    };
+  }
+}
+
+function isOutlinePixel(data: Uint8ClampedArray, index: number) {
+  const alpha = data[index + 3];
+  const luminance =
+    data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
+
+  return (
+    alpha > 20 &&
+    ((data[index] < 145 && data[index + 1] < 145 && data[index + 2] < 145) ||
+      luminance < 165)
+  );
+}
+
+function dilateBoundaryMask(
+  sourceMask: Uint8Array,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const nextMask = new Uint8Array(sourceMask);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+
+      if (!sourceMask[index]) {
+        continue;
+      }
+
+      for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+        for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+          const nextX = x + offsetX;
+          const nextY = y + offsetY;
+
+          if (
+            nextX >= 0 &&
+            nextY >= 0 &&
+            nextX < width &&
+            nextY < height
+          ) {
+            nextMask[nextY * width + nextX] = 1;
+          }
+        }
+      }
+    }
+  }
+
+  return nextMask;
+}
+
+function findFillStartPoint(
+  startX: number,
+  startY: number,
+  boundaryMask: Uint8Array,
+) {
+  const clampedX = Math.round(Math.min(Math.max(startX, 0), CANVAS_SIZE - 1));
+  const clampedY = Math.round(Math.min(Math.max(startY, 0), CANVAS_SIZE - 1));
+  const startIndex = clampedY * CANVAS_SIZE + clampedX;
+
+  if (!boundaryMask[startIndex]) {
+    return startIndex;
+  }
+
+  for (let radius = 1; radius <= TAP_SEARCH_RADIUS; radius += 1) {
+    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+        if (Math.abs(offsetX) !== radius && Math.abs(offsetY) !== radius) {
+          continue;
+        }
+
+        const nextX = clampedX + offsetX;
+        const nextY = clampedY + offsetY;
+
+        if (
+          nextX >= 0 &&
+          nextY >= 0 &&
+          nextX < CANVAS_SIZE &&
+          nextY < CANVAS_SIZE
+        ) {
+          const nextIndex = nextY * CANVAS_SIZE + nextX;
+
+          if (!boundaryMask[nextIndex]) {
+            return nextIndex;
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 export function CanvasEditor() {
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -124,10 +247,15 @@ export function CanvasEditor() {
   const [fillColor, setFillColor] = useState(SWATCHES[0]);
   const [selectedPose, setSelectedPose] = useState(POSE_OPTIONS[0].id);
   const [imageUrl, setImageUrl] = useState("");
-  const [model, setModel] = useState(DEFAULT_MODEL);
+  const [existingImages, setExistingImages] = useState<GeneratedImage[]>([]);
   const [status, setStatus] = useState("Choose a Pokemon");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
+  const selectedPoseLabel =
+    POSE_OPTIONS.find((pose) => pose.id === selectedPose)?.label ??
+    POSE_OPTIONS[0].label;
+  const hasExistingImages = existingImages.length > 0;
 
   function clearAllCanvases() {
     for (const canvas of [
@@ -148,43 +276,7 @@ export function CanvasEditor() {
     setImageUrl("");
   }
 
-  async function generateColoringPagePng(pokemonName: string) {
-    const poseLabel =
-      POSE_OPTIONS.find((pose) => pose.id === selectedPose)?.label ??
-      POSE_OPTIONS[0].label;
-
-    setIsGenerating(true);
-    setStatus(`Generating ${pokemonName} ${poseLabel.toLowerCase()}`);
-
-    try {
-      const response = await fetch("/api/coloring-page", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          pokemonName,
-          pose: selectedPose,
-          model,
-        }),
-      });
-      const result = await readGenerateResponse(response);
-
-      if (!response.ok || !result.imageUrl) {
-        throw new Error(result.error || "Could not generate the PNG.");
-      }
-
-      await loadImageToCanvases(result.imageUrl);
-      setImageUrl(result.imageUrl);
-      setStatus(`${pokemonName} ${poseLabel.toLowerCase()} ready`);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Generation failed");
-    } finally {
-      setIsGenerating(false);
-    }
-  }
-
-  async function loadImageToCanvases(nextImageUrl: string) {
+  const loadImageToCanvases = useCallback(async (nextImageUrl: string) => {
     const maskCanvas = maskCanvasRef.current;
     const colorCanvas = colorCanvasRef.current;
     const lineCanvas = lineCanvasRef.current;
@@ -256,6 +348,110 @@ export function CanvasEditor() {
     lineContext.putImageData(outlineImage, 0, 0);
     undoStackRef.current = [];
     setCanUndo(false);
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadExistingImages() {
+      setIsLoadingImages(true);
+      setExistingImages([]);
+      setStatus(
+        `Looking for ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()}`,
+      );
+
+      try {
+        const params = new URLSearchParams({
+          pokemonName: selectedPokemon.name,
+          pose: selectedPose,
+        });
+        const response = await fetch(`/api/coloring-page?${params}`, {
+          signal: controller.signal,
+        });
+        const result = await readImagesResponse(response);
+
+        if (!response.ok) {
+          throw new Error(result.error || "Could not load saved images.");
+        }
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const images = result.images ?? [];
+        setExistingImages(images);
+
+        if (images[0]) {
+          await loadImageToCanvases(images[0].url);
+
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          setImageUrl(images[0].url);
+          setStatus(
+            `Showing saved ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()}`,
+          );
+        } else {
+          setStatus(
+            `Selected ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()}`,
+          );
+        }
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setStatus(error instanceof Error ? error.message : "Could not load saved images");
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoadingImages(false);
+        }
+      }
+    }
+
+    void loadExistingImages();
+
+    return () => controller.abort();
+  }, [loadImageToCanvases, selectedPokemon.name, selectedPose, selectedPoseLabel]);
+
+  async function generateColoringPagePng(pokemonName: string) {
+    const poseLabel = selectedPoseLabel;
+
+    setIsGenerating(true);
+    setStatus(`Generating ${pokemonName} ${poseLabel.toLowerCase()}`);
+
+    try {
+      const response = await fetch("/api/coloring-page", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          pokemonName,
+          pose: selectedPose,
+        }),
+      });
+      const result = await readGenerateResponse(response);
+
+      if (!response.ok || !result.imageUrl) {
+        throw new Error(result.error || "Could not generate the PNG.");
+      }
+
+      await loadImageToCanvases(result.imageUrl);
+      setImageUrl(result.imageUrl);
+      if (result.image) {
+        setExistingImages((images) => [
+          result.image as GeneratedImage,
+          ...images.filter((image) => image.pathname !== result.image?.pathname),
+        ]);
+      }
+      setStatus(`${pokemonName} ${poseLabel.toLowerCase()} ready`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Generation failed");
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   function getCanvasPoint(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -271,93 +467,6 @@ export function CanvasEditor() {
       x: Math.floor(((event.clientX - rect.left) / rect.width) * canvas.width),
       y: Math.floor(((event.clientY - rect.top) / rect.height) * canvas.height),
     };
-  }
-
-  function isOutlinePixel(data: Uint8ClampedArray, index: number) {
-    const alpha = data[index + 3];
-    const luminance =
-      data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
-
-    return (
-      alpha > 20 &&
-      ((data[index] < 145 && data[index + 1] < 145 && data[index + 2] < 145) ||
-        luminance < 165)
-    );
-  }
-
-  function dilateBoundaryMask(
-    sourceMask: Uint8Array,
-    width: number,
-    height: number,
-    radius: number,
-  ) {
-    const nextMask = new Uint8Array(sourceMask);
-
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const index = y * width + x;
-
-        if (!sourceMask[index]) {
-          continue;
-        }
-
-        for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
-          for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
-            const nextX = x + offsetX;
-            const nextY = y + offsetY;
-
-            if (
-              nextX >= 0 &&
-              nextY >= 0 &&
-              nextX < width &&
-              nextY < height
-            ) {
-              nextMask[nextY * width + nextX] = 1;
-            }
-          }
-        }
-      }
-    }
-
-    return nextMask;
-  }
-
-  function findFillStartPoint(startX: number, startY: number, boundaryMask: Uint8Array) {
-    const clampedX = Math.round(Math.min(Math.max(startX, 0), CANVAS_SIZE - 1));
-    const clampedY = Math.round(Math.min(Math.max(startY, 0), CANVAS_SIZE - 1));
-    const startIndex = clampedY * CANVAS_SIZE + clampedX;
-
-    if (!boundaryMask[startIndex]) {
-      return startIndex;
-    }
-
-    for (let radius = 1; radius <= TAP_SEARCH_RADIUS; radius += 1) {
-      for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
-        for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
-          if (Math.abs(offsetX) !== radius && Math.abs(offsetY) !== radius) {
-            continue;
-          }
-
-          const nextX = clampedX + offsetX;
-          const nextY = clampedY + offsetY;
-
-          if (
-            nextX >= 0 &&
-            nextY >= 0 &&
-            nextX < CANVAS_SIZE &&
-            nextY < CANVAS_SIZE
-          ) {
-            const nextIndex = nextY * CANVAS_SIZE + nextX;
-
-            if (!boundaryMask[nextIndex]) {
-              return nextIndex;
-            }
-          }
-        }
-      }
-    }
-
-    return null;
   }
 
   const floodFill = useCallback(
@@ -522,13 +631,27 @@ export function CanvasEditor() {
     setStatus(`Selected ${pokemon.name}`);
   }
 
+  async function selectExistingImage(image: GeneratedImage) {
+    setStatus(`Loading saved ${selectedPokemon.name}`);
+
+    try {
+      await loadImageToCanvases(image.url);
+      setImageUrl(image.url);
+      setStatus(
+        `Showing saved ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()}`,
+      );
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not load image");
+    }
+  }
+
   return (
     <main className="fixed inset-0 overflow-hidden bg-[#f7f9fc] text-slate-950 overscroll-none">
       <div className="grid h-[100dvh] min-h-0 grid-cols-[280px_minmax(0,1fr)] max-[720px]:grid-cols-1 max-[720px]:grid-rows-[auto_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col overflow-hidden border-r border-slate-200 bg-white p-3 max-[720px]:max-h-[46dvh] max-[720px]:border-b max-[720px]:border-r-0">
           <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
             <div>
-              <h1 className="text-xl font-black">Canvas Camp</h1>
+              <h1 className="text-xl font-black">Pokemon Camp</h1>
               <p className="text-xs font-bold text-slate-500">
                 {POKEMON_COUNT} Pokemon coloring tree
               </p>
@@ -537,21 +660,6 @@ export function CanvasEditor() {
               <PaintBucket aria-hidden="true" size={20} />
             </span>
           </div>
-
-          <label className="mb-3 grid shrink-0 gap-2 text-xs font-black uppercase text-slate-500">
-            Model
-            <select
-              className="h-10 rounded-lg border-2 border-slate-200 bg-white px-3 text-xs font-black text-slate-950 outline-none transition focus:border-slate-950"
-              value={model}
-              onChange={(event) => setModel(event.target.value)}
-            >
-              {MODEL_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
 
           <div className="mb-3 grid shrink-0 gap-2">
             <p className="text-xs font-black uppercase text-slate-500">Pose</p>
@@ -677,9 +785,14 @@ export function CanvasEditor() {
                 <Eraser aria-hidden="true" size={18} />
               </button>
               <button
-                aria-label="Generate image"
-                className="flex h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-40"
+                aria-label={hasExistingImages ? "Generate another image" : "Generate image"}
+                className={
+                  hasExistingImages
+                    ? "grid size-11 place-items-center rounded-lg border-2 border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 disabled:opacity-40"
+                    : "flex h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-40"
+                }
                 disabled={isGenerating}
+                title={hasExistingImages ? "Generate another" : "Generate"}
                 type="button"
                 onClick={() => void generateColoringPagePng(selectedPokemon.name)}
               >
@@ -688,7 +801,7 @@ export function CanvasEditor() {
                 ) : (
                   <Sparkles aria-hidden="true" size={18} />
                 )}
-                Generate
+                {hasExistingImages ? null : "Generate"}
               </button>
               <button
                 aria-label="Download PNG"
@@ -702,11 +815,43 @@ export function CanvasEditor() {
             </div>
           </div>
 
+          {hasExistingImages ? (
+            <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="hidden items-center gap-2 text-xs font-black uppercase text-slate-500 min-[560px]:flex">
+                <Images aria-hidden="true" size={16} />
+                Saved
+              </div>
+              <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto overscroll-x-contain">
+                {existingImages.map((image, index) => (
+                  <button
+                    key={image.pathname}
+                    aria-label={`Open saved image ${index + 1}`}
+                    className={`relative size-16 shrink-0 overflow-hidden rounded-md border-2 bg-white transition ${
+                      image.url === imageUrl
+                        ? "border-slate-950"
+                        : "border-slate-200 hover:border-slate-400"
+                    }`}
+                    type="button"
+                    onClick={() => void selectExistingImage(image)}
+                  >
+                    <img
+                      alt=""
+                      className="size-full object-contain"
+                      src={image.url}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3">
             <div
               className="w-full"
               style={{
-                maxWidth: "min(100%, calc(100dvh - 150px), 860px)",
+                maxWidth: hasExistingImages
+                  ? "min(100%, calc(100dvh - 250px), 860px)"
+                  : "min(100%, calc(100dvh - 150px), 860px)",
               }}
             >
               <div className="relative aspect-square overflow-hidden rounded-lg border-2 border-slate-950 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
@@ -733,26 +878,42 @@ export function CanvasEditor() {
                 {!imageUrl ? (
                   <div className="absolute inset-0 grid place-items-center bg-white text-center">
                     <div className="grid gap-3">
-                      <ImageIcon
-                        aria-hidden="true"
-                        className="mx-auto text-slate-300"
-                        size={56}
-                      />
-                      <button
-                        className="rounded-lg bg-slate-950 px-5 py-3 text-sm font-black text-white disabled:opacity-50"
-                        disabled={isGenerating}
-                        type="button"
-                        onClick={() =>
-                          void generateColoringPagePng(selectedPokemon.name)
-                        }
-                      >
-                        {isGenerating
-                          ? "Generating"
-                          : `Generate ${selectedPokemon.name} ${
-                              POSE_OPTIONS.find((pose) => pose.id === selectedPose)
-                                ?.label
-                            }`}
-                      </button>
+                      {isLoadingImages ? (
+                        <Loader2
+                          aria-hidden="true"
+                          className="mx-auto animate-spin text-slate-300"
+                          size={56}
+                        />
+                      ) : (
+                        <ImageIcon
+                          aria-hidden="true"
+                          className="mx-auto text-slate-300"
+                          size={56}
+                        />
+                      )}
+                      {isLoadingImages ? null : (
+                        <button
+                          className="flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 py-3 text-sm font-black text-white disabled:opacity-50"
+                          disabled={isGenerating}
+                          type="button"
+                          onClick={() =>
+                            void generateColoringPagePng(selectedPokemon.name)
+                          }
+                        >
+                          {isGenerating ? (
+                            <Loader2
+                              aria-hidden="true"
+                              className="animate-spin"
+                              size={18}
+                            />
+                          ) : (
+                            <Plus aria-hidden="true" size={18} />
+                          )}
+                          {isGenerating
+                            ? "Generating"
+                            : `Generate ${selectedPokemon.name} ${selectedPoseLabel}`}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : null}

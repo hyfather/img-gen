@@ -1,12 +1,15 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  listGeneratedImages,
+  saveGeneratedImage,
+} from "@/lib/generated-images";
 import { POKEMON_TYPE_GROUPS } from "@/lib/pokemon";
 
 export const runtime = "nodejs";
 
 const OPENROUTER_IMAGES_URL = "https://openrouter.ai/api/v1/images";
-const DEFAULT_MODEL = "google/gemini-2.5-flash-image";
-const GENERATED_DIR = "generated-coloring-pages";
+const IMAGE_MODEL = "recraft/recraft-v4.1-vector";
+const OUTPUT_FORMAT = "jpeg";
+const OUTPUT_CONTENT_TYPE = "image/jpeg";
 const POSE_PROMPTS = {
   standing: "standing in a clear natural pose",
   sitting: "sitting in a cute relaxed pose",
@@ -78,46 +81,75 @@ function promptForPokemon(pokemonName: string, posePrompt: string) {
   return `Create a clean black-and-white outline drawing of ${pokemonName}, closely matching the real character design and proportions so it is immediately recognizable. Show the Pokemon ${posePrompt} that preserves its signature features, anatomy, expression, and major markings. Use bold, smooth black outlines with closed enclosed shapes so the image is suitable for coloring and easy to flood fill. Keep the inside plain white only, with no color, no shading, no gradients, no texture, and no sketch lines. Simplify only tiny surface details as needed, but retain the authentic silhouette and major visual details. Use a plain white background, no text, no scenery, no border, and output as a high-resolution PNG centered in frame.`;
 }
 
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
-
-function getBase64Image(image: OpenRouterImage) {
+function getImagePayload(image: OpenRouterImage) {
   if (image.b64_json) {
-    return image.b64_json;
+    return {
+      base64: image.b64_json,
+      contentType: OUTPUT_CONTENT_TYPE,
+      extension: "jpg",
+    };
   }
 
   if (image.url?.startsWith("data:image/")) {
-    return image.url.split(",", 2)[1] ?? "";
+    const [header, base64 = ""] = image.url.split(",", 2);
+    const contentType = header.match(/^data:(image\/[^;]+)/)?.[1] ?? OUTPUT_CONTENT_TYPE;
+    const extension = contentType.includes("png")
+      ? "png"
+      : contentType.includes("webp")
+        ? "webp"
+        : "jpg";
+
+    return {
+      base64,
+      contentType,
+      extension,
+    };
   }
 
-  return "";
+  return {
+    base64: "",
+    contentType: OUTPUT_CONTENT_TYPE,
+    extension: "jpg",
+  };
 }
 
-async function saveGeneratedImageLocally(
-  pokemonName: string,
-  pose: keyof typeof POSE_PROMPTS,
-  base64: string,
-) {
-  if (process.env.VERCEL === "1") {
-    return "";
-  }
+function parsePokemonPose(request: Request, body?: { pokemonName?: unknown; pose?: unknown } | null) {
+  const url = new URL(request.url);
+  const pokemonName =
+    typeof body?.pokemonName === "string"
+      ? body.pokemonName.trim()
+      : (url.searchParams.get("pokemonName") ?? "").trim();
+  const poseValue =
+    typeof body?.pose === "string" ? body.pose : url.searchParams.get("pose");
+  const pose =
+    typeof poseValue === "string" && poseValue in POSE_PROMPTS
+      ? (poseValue as keyof typeof POSE_PROMPTS)
+      : "standing";
 
-  const filename = `${slugify(pokemonName)}-${pose}-${Date.now()}.png`;
-  const directory = join(process.cwd(), "public", GENERATED_DIR);
-  const path = join(directory, filename);
-  const bytes = Buffer.from(base64, "base64");
+  return { pokemonName, pose };
+}
 
+function validatePokemon(pokemonName: string) {
+  return Boolean(pokemonName && POKEMON_NAMES.has(pokemonName.toLowerCase()));
+}
+
+export async function GET(request: Request) {
   try {
-    await mkdir(directory, { recursive: true });
-    await writeFile(path, bytes);
+    const { pokemonName, pose } = parsePokemonPose(request);
 
-    return `/${GENERATED_DIR}/${filename}`;
-  } catch {
-    return "";
+    if (!validatePokemon(pokemonName)) {
+      return jsonError("Choose a supported Pokemon.", 400);
+    }
+
+    return Response.json({
+      images: await listGeneratedImages(pokemonName, pose),
+      pokemonName,
+      pose,
+    });
+  } catch (error) {
+    return jsonError(
+      error instanceof Error ? error.message : "Failed to load images.",
+    );
   }
 }
 
@@ -132,20 +164,10 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as {
       pokemonName?: unknown;
       pose?: unknown;
-      model?: unknown;
     } | null;
-    const pokemonName =
-      typeof body?.pokemonName === "string" ? body.pokemonName.trim() : "";
-    const pose =
-      typeof body?.pose === "string" && body.pose in POSE_PROMPTS
-        ? (body.pose as keyof typeof POSE_PROMPTS)
-        : "standing";
-    const model =
-      typeof body?.model === "string" && body.model.trim()
-        ? body.model.trim()
-        : process.env.OPENROUTER_IMAGE_MODEL || DEFAULT_MODEL;
+    const { pokemonName, pose } = parsePokemonPose(request, body);
 
-    if (!pokemonName || !POKEMON_NAMES.has(pokemonName.toLowerCase())) {
+    if (!validatePokemon(pokemonName)) {
       return jsonError("Choose a supported Pokemon.", 400);
     }
 
@@ -156,10 +178,10 @@ export async function POST(request: Request) {
       "X-Title": "Canvas Camp Coloring Pages",
     };
     const payload: OpenRouterImageRequest = {
-      model,
+      model: IMAGE_MODEL,
       prompt: promptForPokemon(pokemonName, POSE_PROMPTS[pose]),
       modalities: ["image", "text"],
-      output_format: "png",
+      output_format: OUTPUT_FORMAT,
       size: "1024x1024",
       n: 1,
     };
@@ -204,22 +226,31 @@ export async function POST(request: Request) {
       return jsonError(upstreamError, 502);
     }
 
-    const base64 = result?.data?.[0] ? getBase64Image(result.data[0]) : "";
+    const imagePayload = result?.data?.[0]
+      ? getImagePayload(result.data[0])
+      : {
+          base64: "",
+          contentType: OUTPUT_CONTENT_TYPE,
+          extension: "jpg",
+        };
 
-    if (!base64) {
-      return jsonError("OpenRouter did not return PNG image data.", 502);
+    if (!imagePayload.base64) {
+      return jsonError("OpenRouter did not return image data.", 502);
     }
 
-    const savedImageUrl = await saveGeneratedImageLocally(
+    const image = await saveGeneratedImage({
+      base64: imagePayload.base64,
+      contentType: imagePayload.contentType,
+      extension: imagePayload.extension,
       pokemonName,
       pose,
-      base64,
-    );
+    });
 
     return Response.json(
       {
-        imageUrl: savedImageUrl || `data:image/png;base64,${base64}`,
-        model,
+        image,
+        imageUrl: image.url,
+        model: IMAGE_MODEL,
         pokemonName,
         pose,
       },
