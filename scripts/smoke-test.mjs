@@ -45,21 +45,38 @@ await page.getByRole("button", { name: "Backgrounds" }).click();
 await page.getByRole("button", { name: /Meadow Stage/i }).click();
 await page.getByRole("button", { name: "Pokemon" }).click();
 await page.getByRole("button", { name: /Spark Cub.*Add/i }).click();
-await page.getByRole("button", { name: /Spark Cub settings/i }).last().click();
+await page.getByRole("button", { name: "Close settings" }).click();
+await page.getByRole("button", { name: "Open settings" }).click();
 await page.getByLabel("Name").fill("Kinder Card");
 await page.getByRole("button", { name: /Outline/i }).click();
 
 const after = await page.evaluate(() => ({
   backgroundImageCount: document.querySelectorAll("svg image").length,
+  cardText: Array.from(document.querySelectorAll("svg text")).map((text) =>
+    text.textContent?.trim(),
+  ),
   inputValues: Array.from(document.querySelectorAll("input"))
     .map((input) => input.value)
     .slice(0, 8),
   nameInputEdited: Array.from(document.querySelectorAll("input")).some(
     (input) => input.value === "Kinder Card",
   ),
+  panelSettingsButtonPresent: Array.from(document.querySelectorAll("button")).some(
+    (button) => button.textContent?.trim() === "Close settings",
+  ),
   outlineOff: Array.from(document.querySelectorAll("button")).some(
     (button) => button.textContent?.trim() === "OutlineOff",
   ),
+  simplifiedCard:
+    !Array.from(document.querySelectorAll("svg text")).some((text) =>
+      ["Zap Hop", "Electric type"].includes(text.textContent?.trim() ?? ""),
+    ) &&
+    Array.from(document.querySelectorAll("svg text")).some((text) =>
+      text.textContent?.trim().startsWith("Kinder"),
+    ) &&
+    Array.from(document.querySelectorAll("svg text")).some(
+      (text) => text.textContent?.trim() === "HP 60",
+    ),
   shapeButtonsRemoved: !document.body.innerText.includes("Box"),
   svgGroupCount: document.querySelectorAll("svg g").length,
 }));

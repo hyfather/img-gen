@@ -196,22 +196,7 @@ const POKEMON_TEMPLATES: PokemonTemplate[] = [
   },
 ];
 
-const DEFAULT_ITEMS: CanvasItem[] = [
-  {
-    id: "starter-card",
-    label: "Spark Cub",
-    pokemonType: "electric",
-    hp: 60,
-    move: "Zap Hop",
-    x: 780,
-    y: 285,
-    width: 300,
-    height: 410,
-    rotation: -3,
-    fill: "#fef08a",
-    showOutline: true,
-  },
-];
+const DEFAULT_ITEMS: CanvasItem[] = [];
 
 const SWATCHES = [
   "#fef08a",
@@ -243,7 +228,7 @@ function shortText(value: string, max = 15) {
 
 function cardTitleText(label: string, width: number, fontSize: number) {
   const maxCharacters = clamp(
-    Math.floor((width * 0.44) / (fontSize * 0.55)),
+    Math.floor((width * 0.52) / (fontSize * 0.55)),
     5,
     14,
   );
@@ -321,61 +306,78 @@ function pokemonCardSvg(item: CanvasItem) {
   const cx = x + width / 2;
   const imageTop = y + height * 0.18;
   const imageHeight = height * 0.38;
-  const titleSize = clamp(width * 0.1, 16, 28);
+  const titleSize = clamp(width * 0.085, 15, 24);
   const hpSize = clamp(width * 0.075, 12, 22);
   const bodySize = clamp(width * 0.075, 11, 21);
   const radius = Math.min(8, width * 0.04);
   const creatureTop = imageTop + imageHeight * 0.18;
   const creatureBase = imageTop + imageHeight * 0.73;
+  const hpText = `HP ${item.hp}`;
+  const hpX = item.showOutline ? x + width * 0.78 : x + width * 0.08;
+  const hpY = item.showOutline ? y + height * 0.103 : y + height * 0.16;
+  const typeX = item.showOutline
+    ? x + width * 0.88
+    : hpX + hpText.length * hpSize * 0.62 + width * 0.075;
+  const typeY = item.showOutline ? y + height * 0.091 : y + height * 0.146;
 
   return `
-    <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${radius}" fill="${item.fill}" ${svgStroke(
-      item,
-      4,
-    )} />
-    <rect x="${x + width * 0.045}" y="${y + height * 0.035}" width="${
-      width * 0.91
-    }" height="${height * 0.11}" rx="${Math.min(
-      8,
-      radius,
-    )}" fill="${typeStyle.soft}" ${svgStroke(item, 2)} />
+    ${
+      item.showOutline
+        ? `
+          <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${radius}" fill="${item.fill}" ${svgStroke(
+            item,
+            4,
+          )} />
+          <rect x="${x + width * 0.045}" y="${y + height * 0.035}" width="${
+            width * 0.91
+          }" height="${height * 0.11}" rx="${Math.min(
+            8,
+            radius,
+          )}" fill="${typeStyle.soft}" ${svgStroke(item, 2)} />
+        `
+        : ""
+    }
     <text x="${x + width * 0.08}" y="${
       y + height * 0.105
     }" font-family="Geist, Arial, sans-serif" font-size="${titleSize}" font-weight="900" fill="#111827">${escapeXml(
       cardTitleText(item.label, width, titleSize),
     )}</text>
-    <text x="${x + width * 0.78}" y="${
-      y + height * 0.103
-    }" text-anchor="end" font-family="Geist, Arial, sans-serif" font-size="${hpSize}" font-weight="900" fill="#111827">HP ${item.hp}</text>
+    <text x="${hpX}" y="${hpY}" text-anchor="${
+      item.showOutline ? "end" : "start"
+    }" font-family="Geist, Arial, sans-serif" font-size="${hpSize}" font-weight="900" fill="#111827">${hpText}</text>
     ${typeMarkSvg(
       item.pokemonType,
-      x + width * 0.88,
-      y + height * 0.091,
+      typeX,
+      typeY,
       width * 0.052,
       item.showOutline,
     )}
-    <rect x="${x + width * 0.08}" y="${imageTop}" width="${
-      width * 0.84
-    }" height="${imageHeight}" rx="${Math.min(
-      8,
-      radius,
-    )}" fill="#ffffff" fill-opacity="0.72" ${svgStroke(item, 2)} />
+    ${
+      item.showOutline
+        ? `<rect x="${x + width * 0.08}" y="${imageTop}" width="${
+            width * 0.84
+          }" height="${imageHeight}" rx="${Math.min(
+            8,
+            radius,
+          )}" fill="#ffffff" fill-opacity="0.72" ${svgStroke(item, 2)} />`
+        : ""
+    }
     <ellipse cx="${cx}" cy="${creatureBase}" rx="${width * 0.19}" ry="${
       imageHeight * 0.2
     }" fill="${typeStyle.color}" fill-opacity="0.22" />
     <circle cx="${cx}" cy="${creatureTop + imageHeight * 0.24}" r="${
       width * 0.15
-    }" fill="${typeStyle.color}" ${svgStroke(item, 3)} />
+    }" fill="${typeStyle.color}" stroke="#111827" stroke-width="3" />
     <ellipse cx="${cx - width * 0.085}" cy="${
       creatureTop + imageHeight * 0.21
     }" rx="${width * 0.055}" ry="${imageHeight * 0.12}" fill="${
       typeStyle.soft
-    }" ${svgStroke(item, 3)} />
+    }" stroke="#111827" stroke-width="3" />
     <ellipse cx="${cx + width * 0.085}" cy="${
       creatureTop + imageHeight * 0.21
     }" rx="${width * 0.055}" ry="${imageHeight * 0.12}" fill="${
       typeStyle.soft
-    }" ${svgStroke(item, 3)} />
+    }" stroke="#111827" stroke-width="3" />
     <circle cx="${cx - width * 0.05}" cy="${
       creatureTop + imageHeight * 0.27
     }" r="${width * 0.012}" fill="#111827" />
@@ -387,30 +389,36 @@ function pokemonCardSvg(item: CanvasItem) {
     } Q ${cx} ${creatureTop + imageHeight * 0.43} ${cx + width * 0.045} ${
       creatureTop + imageHeight * 0.36
     }" fill="none" stroke="#111827" stroke-width="3" stroke-linecap="round" />
-    <rect x="${x + width * 0.08}" y="${y + height * 0.61}" width="${
-      width * 0.84
-    }" height="${height * 0.11}" rx="${Math.min(
-      8,
-      radius,
-    )}" fill="#ffffff" fill-opacity="0.65" ${svgStroke(item, 2)} />
-    <text x="${x + width * 0.12}" y="${
-      y + height * 0.68
-    }" font-family="Geist, Arial, sans-serif" font-size="${bodySize}" font-weight="850" fill="#111827">${escapeXml(
-      shortText(item.move, 18),
-    )}</text>
-    <text x="${x + width * 0.12}" y="${
-      y + height * 0.82
-    }" font-family="Geist, Arial, sans-serif" font-size="${bodySize * 0.82}" font-weight="800" fill="#111827">${typeStyle.name} type</text>
-    <rect x="${x + width * 0.12}" y="${y + height * 0.86}" width="${
-      width * 0.76
-    }" height="${height * 0.035}" rx="${
-      height * 0.018
-    }" fill="#111827" fill-opacity="0.14" />
-    <rect x="${x + width * 0.12}" y="${y + height * 0.86}" width="${
-      width * 0.76 * clamp(item.hp / 120, 0.1, 1)
-    }" height="${height * 0.035}" rx="${
-      height * 0.018
-    }" fill="${typeStyle.color}" />
+    ${
+      item.showOutline
+        ? `
+          <rect x="${x + width * 0.08}" y="${y + height * 0.61}" width="${
+            width * 0.84
+          }" height="${height * 0.11}" rx="${Math.min(
+            8,
+            radius,
+          )}" fill="#ffffff" fill-opacity="0.65" ${svgStroke(item, 2)} />
+          <text x="${x + width * 0.12}" y="${
+            y + height * 0.68
+          }" font-family="Geist, Arial, sans-serif" font-size="${bodySize}" font-weight="850" fill="#111827">${escapeXml(
+            shortText(item.move, 18),
+          )}</text>
+          <text x="${x + width * 0.12}" y="${
+            y + height * 0.82
+          }" font-family="Geist, Arial, sans-serif" font-size="${bodySize * 0.82}" font-weight="800" fill="#111827">${typeStyle.name} type</text>
+          <rect x="${x + width * 0.12}" y="${y + height * 0.86}" width="${
+            width * 0.76
+          }" height="${height * 0.035}" rx="${
+            height * 0.018
+          }" fill="#111827" fill-opacity="0.14" />
+          <rect x="${x + width * 0.12}" y="${y + height * 0.86}" width="${
+            width * 0.76 * clamp(item.hp / 120, 0.1, 1)
+          }" height="${height * 0.035}" rx="${
+            height * 0.018
+          }" fill="${typeStyle.color}" />
+        `
+        : ""
+    }
   `;
 }
 
@@ -517,14 +525,12 @@ export function CanvasEditor({
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [items, setItems] = useState<CanvasItem[]>(DEFAULT_ITEMS);
-  const [selectedId, setSelectedId] = useState(DEFAULT_ITEMS[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState("");
   const [settingsCardId, setSettingsCardId] = useState("");
   const [interaction, setInteraction] = useState<Interaction | null>(null);
   const [activePanel, setActivePanel] = useState<PanelMode>("pokemon");
   const [activeType, setActiveType] = useState<PokemonType>("electric");
-  const [selectedBackgroundSrc, setSelectedBackgroundSrc] = useState(
-    backgrounds[0]?.src ?? "",
-  );
+  const [selectedBackgroundSrc, setSelectedBackgroundSrc] = useState("");
   const [showGrid, setShowGrid] = useState(true);
   const [exportScale, setExportScale] = useState(2);
 
@@ -589,15 +595,15 @@ export function CanvasEditor({
   }
 
   function addPokemon(template: PokemonTemplate) {
-    const offset = (items.length % 7) * 34;
+    const offset = (items.length % 5) * 48;
     const newItem: CanvasItem = {
       id: makeId(),
       label: template.label,
       pokemonType: template.pokemonType,
       hp: template.hp,
       move: template.move,
-      x: 700 + offset,
-      y: 230 + offset,
+      x: 610 + offset,
+      y: 235 + offset,
       width: 300,
       height: 410,
       rotation: 0,
@@ -607,7 +613,12 @@ export function CanvasEditor({
 
     setItems((currentItems) => [...currentItems, newItem]);
     setSelectedId(newItem.id);
-    setSettingsCardId("");
+    setSettingsCardId(newItem.id);
+  }
+
+  function toggleSettingsForItem(id: string) {
+    setSelectedId(id);
+    setSettingsCardId((currentId) => (currentId === id ? "" : id));
   }
 
   function beginDrag(event: ReactPointerEvent<SVGGElement>, item: CanvasItem) {
@@ -1027,31 +1038,36 @@ export function CanvasEditor({
                         }
                       />
                     ))}
-                    <foreignObject
-                      height="58"
-                      width="58"
-                      x={item.x + item.width - 18}
-                      y={item.y - 76}
+                    <g
+                      aria-label={`${item.label} settings`}
+                      className="cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                        toggleSettingsForItem(item.id);
+                      }}
                     >
-                      <button
-                        aria-label={`${item.label} settings`}
-                        className={`grid size-12 place-items-center rounded-lg border-2 shadow-lg transition ${
-                          settingsOpen
-                            ? "border-slate-950 bg-slate-950 text-white"
-                            : "border-slate-950 bg-white text-slate-950 hover:bg-slate-100"
-                        }`}
-                        type="button"
-                        onPointerDown={(event) => {
-                          event.stopPropagation();
-                          setSelectedId(item.id);
-                          setSettingsCardId((currentId) =>
-                            currentId === item.id ? "" : item.id,
-                          );
-                        }}
-                      >
-                        <Settings aria-hidden="true" size={22} strokeWidth={3} />
-                      </button>
-                    </foreignObject>
+                      <rect
+                        fill={settingsOpen ? "#020617" : "#ffffff"}
+                        height="52"
+                        rx="8"
+                        stroke="#020617"
+                        strokeWidth="4"
+                        width="52"
+                        x={item.x + item.width - 18}
+                        y={item.y - 76}
+                      />
+                      <Settings
+                        aria-hidden="true"
+                        color={settingsOpen ? "#ffffff" : "#020617"}
+                        height="26"
+                        strokeWidth={3}
+                        width="26"
+                        x={item.x + item.width - 5}
+                        y={item.y - 63}
+                      />
+                    </g>
                   </g>
                 ) : null}
               </g>
@@ -1216,6 +1232,20 @@ export function CanvasEditor({
             </button>
           </div>
         </div>
+
+        <button
+          className={`flex h-11 items-center justify-center gap-2 rounded-lg border-2 text-sm font-black transition disabled:opacity-40 ${
+            settingsOpen
+              ? "border-slate-950 bg-slate-950 text-white"
+              : "border-slate-200 bg-white text-slate-950 hover:border-slate-950"
+          }`}
+          disabled={!selectedItem}
+          type="button"
+          onClick={() => selectedItem && toggleSettingsForItem(selectedItem.id)}
+        >
+          <Settings aria-hidden="true" size={18} strokeWidth={2.8} />
+          {settingsOpen ? "Close settings" : "Open settings"}
+        </button>
 
         {selectedItem && settingsOpen ? (
           <>
@@ -1433,7 +1463,7 @@ export function CanvasEditor({
 
 function PokemonCard({ item }: { item: CanvasItem }) {
   const typeStyle = POKEMON_TYPES[item.pokemonType];
-  const titleSize = clamp(item.width * 0.1, 16, 28);
+  const titleSize = clamp(item.width * 0.085, 15, 24);
   const hpSize = clamp(item.width * 0.075, 12, 22);
   const bodySize = clamp(item.width * 0.075, 11, 21);
   const imageTop = item.y + item.height * 0.18;
@@ -1442,29 +1472,46 @@ function PokemonCard({ item }: { item: CanvasItem }) {
   const creatureTop = imageTop + imageHeight * 0.18;
   const creatureBase = imageTop + imageHeight * 0.73;
   const radius = Math.min(8, item.width * 0.04);
+  const hpText = `HP ${item.hp}`;
+  const hpX = item.showOutline
+    ? item.x + item.width * 0.78
+    : item.x + item.width * 0.08;
+  const hpY = item.showOutline
+    ? item.y + item.height * 0.103
+    : item.y + item.height * 0.16;
+  const typeX = item.showOutline
+    ? item.x + item.width * 0.88
+    : hpX + hpText.length * hpSize * 0.62 + item.width * 0.075;
+  const typeY = item.showOutline
+    ? item.y + item.height * 0.091
+    : item.y + item.height * 0.146;
 
   return (
     <>
-      <rect
-        fill={item.fill}
-        height={item.height}
-        rx={radius}
-        stroke={strokeColor(item)}
-        strokeWidth={strokeWidth(item, 4)}
-        width={item.width}
-        x={item.x}
-        y={item.y}
-      />
-      <rect
-        fill={typeStyle.soft}
-        height={item.height * 0.11}
-        rx={Math.min(8, radius)}
-        stroke={strokeColor(item)}
-        strokeWidth={strokeWidth(item, 2)}
-        width={item.width * 0.91}
-        x={item.x + item.width * 0.045}
-        y={item.y + item.height * 0.035}
-      />
+      {item.showOutline ? (
+        <>
+          <rect
+            fill={item.fill}
+            height={item.height}
+            rx={radius}
+            stroke={strokeColor(item)}
+            strokeWidth={strokeWidth(item, 4)}
+            width={item.width}
+            x={item.x}
+            y={item.y}
+          />
+          <rect
+            fill={typeStyle.soft}
+            height={item.height * 0.11}
+            rx={Math.min(8, radius)}
+            stroke={strokeColor(item)}
+            strokeWidth={strokeWidth(item, 2)}
+            width={item.width * 0.91}
+            x={item.x + item.width * 0.045}
+            y={item.y + item.height * 0.035}
+          />
+        </>
+      ) : null}
       <text
         fill="#111827"
         fontFamily="Geist, Arial, sans-serif"
@@ -1480,30 +1527,32 @@ function PokemonCard({ item }: { item: CanvasItem }) {
         fontFamily="Geist, Arial, sans-serif"
         fontSize={hpSize}
         fontWeight="900"
-        textAnchor="end"
-        x={item.x + item.width * 0.78}
-        y={item.y + item.height * 0.103}
+        textAnchor={item.showOutline ? "end" : "start"}
+        x={hpX}
+        y={hpY}
       >
-        HP {item.hp}
+        {hpText}
       </text>
       <TypeMark
         radius={item.width * 0.052}
         showOutline={item.showOutline}
         type={item.pokemonType}
-        x={item.x + item.width * 0.88}
-        y={item.y + item.height * 0.091}
+        x={typeX}
+        y={typeY}
       />
-      <rect
-        fill="#ffffff"
-        fillOpacity="0.72"
-        height={imageHeight}
-        rx={Math.min(8, radius)}
-        stroke={strokeColor(item)}
-        strokeWidth={strokeWidth(item, 2)}
-        width={item.width * 0.84}
-        x={item.x + item.width * 0.08}
-        y={imageTop}
-      />
+      {item.showOutline ? (
+        <rect
+          fill="#ffffff"
+          fillOpacity="0.72"
+          height={imageHeight}
+          rx={Math.min(8, radius)}
+          stroke={strokeColor(item)}
+          strokeWidth={strokeWidth(item, 2)}
+          width={item.width * 0.84}
+          x={item.x + item.width * 0.08}
+          y={imageTop}
+        />
+      ) : null}
       <ellipse
         cx={centerX}
         cy={creatureBase}
@@ -1517,8 +1566,8 @@ function PokemonCard({ item }: { item: CanvasItem }) {
         cy={creatureTop + imageHeight * 0.24}
         fill={typeStyle.color}
         r={item.width * 0.15}
-        stroke={strokeColor(item)}
-        strokeWidth={strokeWidth(item, 3)}
+        stroke="#111827"
+        strokeWidth="3"
       />
       <ellipse
         cx={centerX - item.width * 0.085}
@@ -1526,8 +1575,8 @@ function PokemonCard({ item }: { item: CanvasItem }) {
         fill={typeStyle.soft}
         rx={item.width * 0.055}
         ry={imageHeight * 0.12}
-        stroke={strokeColor(item)}
-        strokeWidth={strokeWidth(item, 3)}
+        stroke="#111827"
+        strokeWidth="3"
       />
       <ellipse
         cx={centerX + item.width * 0.085}
@@ -1535,8 +1584,8 @@ function PokemonCard({ item }: { item: CanvasItem }) {
         fill={typeStyle.soft}
         rx={item.width * 0.055}
         ry={imageHeight * 0.12}
-        stroke={strokeColor(item)}
-        strokeWidth={strokeWidth(item, 3)}
+        stroke="#111827"
+        strokeWidth="3"
       />
       <circle
         cx={centerX - item.width * 0.05}
@@ -1561,54 +1610,58 @@ function PokemonCard({ item }: { item: CanvasItem }) {
         strokeLinecap="round"
         strokeWidth="3"
       />
-      <rect
-        fill="#ffffff"
-        fillOpacity="0.65"
-        height={item.height * 0.11}
-        rx={Math.min(8, radius)}
-        stroke={strokeColor(item)}
-        strokeWidth={strokeWidth(item, 2)}
-        width={item.width * 0.84}
-        x={item.x + item.width * 0.08}
-        y={item.y + item.height * 0.61}
-      />
-      <text
-        fill="#111827"
-        fontFamily="Geist, Arial, sans-serif"
-        fontSize={bodySize}
-        fontWeight="850"
-        x={item.x + item.width * 0.12}
-        y={item.y + item.height * 0.68}
-      >
-        {shortText(item.move, 18)}
-      </text>
-      <text
-        fill="#111827"
-        fontFamily="Geist, Arial, sans-serif"
-        fontSize={bodySize * 0.82}
-        fontWeight="800"
-        x={item.x + item.width * 0.12}
-        y={item.y + item.height * 0.82}
-      >
-        {typeStyle.name} type
-      </text>
-      <rect
-        fill="#111827"
-        fillOpacity="0.14"
-        height={item.height * 0.035}
-        rx={item.height * 0.018}
-        width={item.width * 0.76}
-        x={item.x + item.width * 0.12}
-        y={item.y + item.height * 0.86}
-      />
-      <rect
-        fill={typeStyle.color}
-        height={item.height * 0.035}
-        rx={item.height * 0.018}
-        width={item.width * 0.76 * clamp(item.hp / 120, 0.1, 1)}
-        x={item.x + item.width * 0.12}
-        y={item.y + item.height * 0.86}
-      />
+      {item.showOutline ? (
+        <>
+          <rect
+            fill="#ffffff"
+            fillOpacity="0.65"
+            height={item.height * 0.11}
+            rx={Math.min(8, radius)}
+            stroke={strokeColor(item)}
+            strokeWidth={strokeWidth(item, 2)}
+            width={item.width * 0.84}
+            x={item.x + item.width * 0.08}
+            y={item.y + item.height * 0.61}
+          />
+          <text
+            fill="#111827"
+            fontFamily="Geist, Arial, sans-serif"
+            fontSize={bodySize}
+            fontWeight="850"
+            x={item.x + item.width * 0.12}
+            y={item.y + item.height * 0.68}
+          >
+            {shortText(item.move, 18)}
+          </text>
+          <text
+            fill="#111827"
+            fontFamily="Geist, Arial, sans-serif"
+            fontSize={bodySize * 0.82}
+            fontWeight="800"
+            x={item.x + item.width * 0.12}
+            y={item.y + item.height * 0.82}
+          >
+            {typeStyle.name} type
+          </text>
+          <rect
+            fill="#111827"
+            fillOpacity="0.14"
+            height={item.height * 0.035}
+            rx={item.height * 0.018}
+            width={item.width * 0.76}
+            x={item.x + item.width * 0.12}
+            y={item.y + item.height * 0.86}
+          />
+          <rect
+            fill={typeStyle.color}
+            height={item.height * 0.035}
+            rx={item.height * 0.018}
+            width={item.width * 0.76 * clamp(item.hp / 120, 0.1, 1)}
+            x={item.x + item.width * 0.12}
+            y={item.y + item.height * 0.86}
+          />
+        </>
+      ) : null}
     </>
   );
 }
