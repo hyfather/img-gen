@@ -4,6 +4,7 @@ import {
   Download,
   Eraser,
   Image as ImageIcon,
+  Layers,
   Loader2,
   PaintBucket,
   Sparkles,
@@ -21,11 +22,16 @@ import {
   type PokemonOption,
   type PokemonType,
 } from "@/lib/pokemon";
+import type { CanvasBackground } from "@/lib/backgrounds";
 
 type GenerateResponse = {
   imageUrl?: string;
   error?: string;
   model?: string;
+};
+
+type CanvasEditorProps = {
+  backgrounds: CanvasBackground[];
 };
 
 type PoseOption = {
@@ -111,7 +117,7 @@ async function readGenerateResponse(response: Response): Promise<GenerateRespons
   }
 }
 
-export function CanvasEditor() {
+export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
   const lineCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -128,6 +134,12 @@ export function CanvasEditor() {
   const [status, setStatus] = useState("Choose a Pokemon");
   const [isGenerating, setIsGenerating] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
+  const [cardImageUrl, setCardImageUrl] = useState("");
+  const [selectedBackground, setSelectedBackground] = useState(backgrounds[0]?.src ?? "");
+  const [backgroundPrompt, setBackgroundPrompt] = useState("sunny meadow training arena");
+  const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
+  const [cardHp, setCardHp] = useState(60);
+  const [cardType, setCardType] = useState<PokemonType>(selectedPokemon.type);
 
   function clearAllCanvases() {
     for (const canvas of [
@@ -146,6 +158,7 @@ export function CanvasEditor() {
     boundaryMaskRef.current = null;
     setCanUndo(false);
     setImageUrl("");
+    setCardImageUrl("");
   }
 
   async function generateColoringPagePng(pokemonName: string) {
@@ -177,6 +190,7 @@ export function CanvasEditor() {
       await loadImageToCanvases(result.imageUrl);
       setImageUrl(result.imageUrl);
       setStatus(`${pokemonName} ${poseLabel.toLowerCase()} ready`);
+      setCardImageUrl("");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Generation failed");
     } finally {
@@ -488,12 +502,12 @@ export function CanvasEditor() {
     colorContext.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
   }
 
-  function downloadColoringPage() {
+  function composeColoredPokemon(includeWhiteBackground = false) {
     const colorCanvas = colorCanvasRef.current;
     const lineCanvas = lineCanvasRef.current;
 
     if (!colorCanvas || !lineCanvas || !imageUrl) {
-      return;
+      return "";
     }
 
     const exportCanvas = document.createElement("canvas");
@@ -502,29 +516,79 @@ export function CanvasEditor() {
     const context = exportCanvas.getContext("2d");
 
     if (!context) {
-      return;
+      return "";
     }
 
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    if (includeWhiteBackground) {
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    }
+
     context.drawImage(colorCanvas, 0, 0);
     context.drawImage(lineCanvas, 0, 0);
 
+    return exportCanvas.toDataURL("image/png");
+  }
+
+  function placeOnCard() {
+    const composedImage = composeColoredPokemon();
+
+    if (!composedImage) {
+      return;
+    }
+
+    setCardImageUrl(composedImage);
+    setStatus(`${selectedPokemon.name} placed on card`);
+  }
+
+  async function generateBackground() {
+    setIsGeneratingBackground(true);
+    setStatus("Generating card background");
+
+    try {
+      const response = await fetch("/api/background-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: backgroundPrompt, model }),
+      });
+      const result = await readGenerateResponse(response);
+
+      if (!response.ok || !result.imageUrl) {
+        throw new Error(result.error || "Could not generate background.");
+      }
+
+      setSelectedBackground(result.imageUrl);
+      setStatus("Generated background selected");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Background generation failed");
+    } finally {
+      setIsGeneratingBackground(false);
+    }
+  }
+
+  function downloadColoringPage() {
+    const coloringPageImage = composeColoredPokemon(true);
+
+    if (!coloringPageImage) {
+      return;
+    }
+
     const link = document.createElement("a");
-    link.href = exportCanvas.toDataURL("image/png");
+    link.href = coloringPageImage;
     link.download = `${selectedPokemon.name.toLowerCase()}-${selectedPose}-coloring-page.png`;
     link.click();
   }
 
   function selectPokemon(pokemon: PokemonOption) {
     setSelectedPokemon(pokemon);
+    setCardType(pokemon.type);
     clearAllCanvases();
     setStatus(`Selected ${pokemon.name}`);
   }
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-[#f7f9fc] text-slate-950 overscroll-none">
-      <div className="grid h-[100dvh] min-h-0 grid-cols-[280px_minmax(0,1fr)] max-[720px]:grid-cols-1 max-[720px]:grid-rows-[auto_minmax(0,1fr)]">
+      <div className="grid h-[100dvh] min-h-0 grid-cols-[280px_minmax(0,1fr)_320px] max-[980px]:grid-cols-[250px_minmax(0,1fr)] max-[720px]:grid-cols-1 max-[720px]:grid-rows-[auto_minmax(0,1fr)_auto]">
         <aside className="flex min-h-0 flex-col overflow-hidden border-r border-slate-200 bg-white p-3 max-[720px]:max-h-[46dvh] max-[720px]:border-b max-[720px]:border-r-0">
           <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
             <div>
@@ -691,6 +755,16 @@ export function CanvasEditor() {
                 Generate
               </button>
               <button
+                aria-label="Place on card"
+                className="flex h-11 items-center gap-2 rounded-lg bg-amber-400 px-4 text-sm font-black text-slate-950 disabled:opacity-40"
+                disabled={!imageUrl}
+                type="button"
+                onClick={placeOnCard}
+              >
+                <Layers aria-hidden="true" size={18} />
+                Place on card
+              </button>
+              <button
                 aria-label="Download PNG"
                 className="grid size-11 place-items-center rounded-lg bg-slate-950 text-white disabled:opacity-40"
                 disabled={!imageUrl}
@@ -764,6 +838,77 @@ export function CanvasEditor() {
             </div>
           </div>
         </section>
+
+        <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-slate-200 bg-white p-3 max-[980px]:col-span-2 max-[980px]:border-l-0 max-[980px]:border-t max-[720px]:col-span-1">
+          <div>
+            <h2 className="text-lg font-black">Pokemon card studio</h2>
+            <p className="text-xs font-bold text-slate-500">Place the colored Pokemon on a card, choose a scene, and tune battle details.</p>
+          </div>
+
+          <div className="rounded-2xl border-4 border-yellow-400 bg-yellow-300 p-3 shadow-xl">
+            <div className="rounded-xl border-2 border-slate-900 bg-white p-2">
+              <div className="mb-2 flex items-end justify-between gap-2">
+                <h3 className="truncate text-xl font-black">{selectedPokemon.name}</h3>
+                <div className="flex items-center gap-1 text-lg font-black text-red-600">
+                  <span className="text-xs text-slate-500">HP</span> {cardHp}
+                  <span className="grid size-7 place-items-center rounded-full text-sm text-white" style={{ backgroundColor: POKEMON_TYPE_GROUPS.find((group) => group.id === cardType)?.color ?? "#64748b" }}>
+                    {cardType.slice(0, 1).toUpperCase()}
+                  </span>
+                </div>
+              </div>
+              <div className="relative aspect-[4/3] overflow-hidden rounded-lg border-2 border-slate-900 bg-slate-100">
+                {selectedBackground ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img alt="Selected card background" className="absolute inset-0 size-full object-cover" src={selectedBackground} />
+                ) : null}
+                {cardImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img alt="Colored Pokemon on card" className="absolute inset-x-8 bottom-0 mx-auto h-[88%] w-auto object-contain drop-shadow-[0_10px_12px_rgba(15,23,42,0.28)]" src={cardImageUrl} />
+                ) : (
+                  <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm font-black text-slate-500">Color a Pokemon, then place it here.</div>
+                )}
+              </div>
+              <div className="mt-2 rounded-lg bg-slate-100 p-2 text-xs font-bold text-slate-700">
+                Type: <span className="font-black capitalize">{cardType}</span> · Custom trainer card
+              </div>
+            </div>
+          </div>
+
+          <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
+            HP
+            <input className="h-10 rounded-lg border-2 border-slate-200 px-3 text-slate-950" min="10" max="340" step="10" type="number" value={cardHp} onChange={(event) => setCardHp(Number(event.target.value) || 10)} />
+          </label>
+
+          <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
+            Type icon
+            <select className="h-10 rounded-lg border-2 border-slate-200 bg-white px-3 text-slate-950" value={cardType} onChange={(event) => setCardType(event.target.value as PokemonType)}>
+              {POKEMON_TYPE_GROUPS.map((group) => (
+                <option key={group.id} value={group.id}>{group.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
+            Default backgrounds
+            <select className="h-10 rounded-lg border-2 border-slate-200 bg-white px-3 text-slate-950" value={selectedBackground} onChange={(event) => setSelectedBackground(event.target.value)}>
+              <option value="">Blank studio</option>
+              {backgrounds.map((background) => (
+                <option key={background.src} value={background.src}>{background.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="grid gap-2 rounded-lg border border-slate-200 p-2">
+            <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
+              Generate background
+              <input className="h-10 rounded-lg border-2 border-slate-200 px-3 text-sm normal-case text-slate-950" value={backgroundPrompt} onChange={(event) => setBackgroundPrompt(event.target.value)} />
+            </label>
+            <button className="flex h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-black text-white disabled:opacity-40" disabled={isGeneratingBackground || !backgroundPrompt.trim()} type="button" onClick={() => void generateBackground()}>
+              {isGeneratingBackground ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : <Sparkles aria-hidden="true" size={16} />}
+              Generate scene
+            </button>
+          </div>
+        </aside>
       </div>
     </main>
   );
