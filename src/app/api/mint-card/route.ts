@@ -19,6 +19,9 @@ type MintCardRequest = {
   resistance?: unknown;
   retreatCost?: unknown;
   cardNumber?: unknown;
+  cardRarity?: unknown;
+  cardRaritySymbol?: unknown;
+  illustratorName?: unknown;
   backgroundPrompt?: unknown;
   model?: unknown;
 };
@@ -49,6 +52,9 @@ function promptForRealisticCard(body: MintCardRequest) {
   const cardStage = textValue(body.cardStage, "custom");
   const cardHp = typeof body.cardHp === "number" ? body.cardHp : textValue(body.cardHp, "custom");
   const evolvesFrom = textValue(body.evolvesFrom, pokemonName);
+  const cardRarity = textValue(body.cardRarity, "Common");
+  const cardRaritySymbol = textValue(body.cardRaritySymbol, "●");
+  const illustratorName = textValue(body.illustratorName, "Unknown");
   const attacks = Array.isArray(body.attacks) ? (body.attacks as CardAttack[]) : [];
   const attackText = attacks
     .map((attack) => `${textValue(attack.name, "Attack")} ${textValue(attack.damage)}`.trim())
@@ -57,9 +63,11 @@ function promptForRealisticCard(body: MintCardRequest) {
 
   return `Use the provided image as the exact layout reference for a custom fan-made Pokemon-style trading card, then transform it into a realistic photographed premium collectible card.
 
-Preserve the user's composition and readable card information: Pokemon name ${pokemonName}${body.isExCard ? " ex" : ""}, ${cardStage}, ${cardHp} HP, ${cardType} type, evolves from ${evolvesFrom}, attacks ${attackText || "as shown"}, weakness ${textValue(body.weakness, "as shown")}, resistance ${textValue(body.resistance, "as shown")}, retreat ${textValue(body.retreatCost, "as shown")}, card number ${textValue(body.cardNumber, "as shown")}.
+Preserve the user's composition and readable card information: Pokemon name ${pokemonName}${body.isExCard ? " ex" : ""}, ${cardStage}, ${cardHp} HP, ${cardType} type, evolves from ${evolvesFrom}, attacks ${attackText || "as shown"}, weakness ${textValue(body.weakness, "as shown")}, resistance ${textValue(body.resistance, "as shown")}, retreat ${textValue(body.retreatCost, "as shown")}, card number ${textValue(body.cardNumber, "as shown")}, rarity ${cardRarity} with symbol ${cardRaritySymbol}, illustrator line "Illus. ${illustratorName}".
 
 Art direction: make the card look like a real physical premium monster-battle trading card photographed in a studio. Add believable glossy laminated cardstock, subtle rounded corners, tiny edge thickness, foil rainbow holographic reflections, fine print texture, sharp ink, a slightly embossed border, and realistic shadows. Keep the card front centered and fully visible in portrait orientation. Upgrade the flat colored Pokemon into polished semi-realistic fantasy card artwork while respecting the user's colors, pose, silhouette, background, and custom stats. Improve lighting and material realism without changing the selected Pokemon identity or replacing the user's card design.
+
+The illustrator credit must be clearly readable on the lower portion of the card as "Illus. ${illustratorName}", not hidden in microtext. The rarity symbol ${cardRaritySymbol} must appear near the collector number.
 
 Important constraints: no extra hands, no tabletop clutter, no logos or watermarks, no unrelated characters, no extra cards, no misspelled decorative gibberish beyond the supplied card text. The result should be a high-resolution realistic final card render, not a blank template.`;
 }

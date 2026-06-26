@@ -1,6 +1,9 @@
 "use client";
 
 import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Eraser,
   Images,
@@ -80,6 +83,44 @@ type PaintOption = {
     | "pearl-foil"
     | "shadow-foil";
   rarity?: "rare" | "ultra-rare";
+};
+
+type WizardStepId =
+  | "pokemon"
+  | "pose"
+  | "image"
+  | "color"
+  | "card"
+  | "mint";
+
+type WizardStep = {
+  id: WizardStepId;
+  label: string;
+  eyebrow: string;
+  title: string;
+  caption: string;
+};
+
+type CardRarityOption = {
+  id: string;
+  label: string;
+  symbol: string;
+  accent: string;
+};
+
+type CardCopyResponse = {
+  attackOneName?: string;
+  attackOneDamage?: string;
+  attackTwoName?: string;
+  attackTwoDamage?: string;
+  weakness?: string;
+  resistance?: string;
+  retreatCost?: string;
+  cardStage?: string;
+  evolvesFrom?: string;
+  isExCard?: boolean;
+  cardNumber?: string;
+  error?: string;
 };
 
 const CANVAS_SIZE = 1024;
@@ -226,6 +267,57 @@ const POSE_OPTIONS: PoseOption[] = [
   { id: "jumping", label: "Jumping" },
   { id: "sleeping", label: "Sleeping" },
 ];
+const WIZARD_STEPS: WizardStep[] = [
+  {
+    id: "pokemon",
+    label: "Pokemon",
+    eyebrow: "01",
+    title: "Choose your star",
+    caption: "Start with the character that should carry the whole card.",
+  },
+  {
+    id: "pose",
+    label: "Pose",
+    eyebrow: "02",
+    title: "Set the energy",
+    caption: "Pick the silhouette and attitude for the coloring page.",
+  },
+  {
+    id: "image",
+    label: "Image",
+    eyebrow: "03",
+    title: "Find the line art",
+    caption: "Use a saved sketch or make a fresh one for this pose.",
+  },
+  {
+    id: "color",
+    label: "Color",
+    eyebrow: "04",
+    title: "Pick the palette",
+    caption: "Choose a paint, then hop to the canvas for flood-fill color.",
+  },
+  {
+    id: "card",
+    label: "Card",
+    eyebrow: "05",
+    title: "Stage the card",
+    caption: "Place the finished art and tune the headline card details.",
+  },
+  {
+    id: "mint",
+    label: "Mint",
+    eyebrow: "06",
+    title: "Make it real",
+    caption: "Save the polished card render to the gallery.",
+  },
+];
+const CARD_RARITY_OPTIONS: CardRarityOption[] = [
+  { id: "common", label: "Common", symbol: "●", accent: "#64748b" },
+  { id: "uncommon", label: "Uncommon", symbol: "◆", accent: "#2563eb" },
+  { id: "rare", label: "Rare", symbol: "★", accent: "#ca8a04" },
+  { id: "ultra-rare", label: "Ultra rare", symbol: "✦", accent: "#db2777" },
+];
+const DEFAULT_CARD_RARITY = CARD_RARITY_OPTIONS[0];
 
 function loadImage(src: string) {
   const image = new Image();
@@ -369,6 +461,10 @@ function getPaintRgba(paint: PaintOption, x: number, y: number) {
   return hexToRgba(paint.color);
 }
 
+function collectorNumberWithoutRarity(cardNumber: string) {
+  return cardNumber.replace(/[●◆★✦]/g, "").trim();
+}
+
 async function readGenerateResponse(response: Response): Promise<GenerateResponse> {
   const text = await response.text();
 
@@ -398,6 +494,24 @@ async function readImagesResponse(response: Response): Promise<ImagesResponse> {
 
   try {
     return JSON.parse(text) as ImagesResponse;
+  } catch {
+    return {
+      error: text.slice(0, 240) || "Server returned a non-JSON response.",
+    };
+  }
+}
+
+async function readCardCopyResponse(response: Response): Promise<CardCopyResponse> {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return {
+      error: `Server returned an empty response (${response.status}).`,
+    };
+  }
+
+  try {
+    return JSON.parse(text) as CardCopyResponse;
   } catch {
     return {
       error: text.slice(0, 240) || "Server returned a non-JSON response.",
@@ -501,6 +615,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
   const lineCanvasRef = useRef<HTMLCanvasElement>(null);
   const boundaryMaskRef = useRef<Uint8Array | null>(null);
+  const loadedCanvasImageUrlRef = useRef("");
   const undoStackRef = useRef<ImageData[]>([]);
   const [activeType, setActiveType] = useState<PokemonType>("electric");
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonOption>(
@@ -512,6 +627,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [customColor, setCustomColor] = useState("#F6C945");
   const [selectedPose, setSelectedPose] = useState(POSE_OPTIONS[0].id);
+  const [isWizardOpen, setIsWizardOpen] = useState(true);
+  const [wizardStep, setWizardStep] = useState<WizardStepId>("pokemon");
   const [imageUrl, setImageUrl] = useState("");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [existingImages, setExistingImages] = useState<GeneratedImage[]>([]);
@@ -525,6 +642,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
   const [cardHp, setCardHp] = useState(340);
   const [cardType, setCardType] = useState<PokemonType>(selectedPokemon.type);
+  const [cardRarity, setCardRarity] = useState(DEFAULT_CARD_RARITY.id);
+  const [illustratorName, setIllustratorName] = useState("Nikhil");
   const [cardBorderColor, setCardBorderColor] = useState("#374151");
   const [cardStage, setCardStage] = useState("Stage 1");
   const [evolvesFrom, setEvolvesFrom] = useState("Riolu");
@@ -539,11 +658,40 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const [cardNumber, setCardNumber] = useState("179/132");
   const [mintedCardUrl, setMintedCardUrl] = useState("");
   const [isMintingCard, setIsMintingCard] = useState(false);
+  const [isGeneratingCardCopy, setIsGeneratingCardCopy] = useState(false);
   const cardTypeStyle = TYPE_ICON_STYLES[cardType];
+  const selectedCardRarity =
+    CARD_RARITY_OPTIONS.find((rarity) => rarity.id === cardRarity) ??
+    DEFAULT_CARD_RARITY;
+  const selectedPokemonTypeStyle = TYPE_ICON_STYLES[selectedPokemon.type];
+  const activeTypeGroup =
+    POKEMON_TYPE_GROUPS.find((group) => group.id === activeType) ??
+    POKEMON_TYPE_GROUPS[0];
   const selectedPoseLabel =
     POSE_OPTIONS.find((pose) => pose.id === selectedPose)?.label ??
     POSE_OPTIONS[0].label;
   const hasExistingImages = existingImages.length > 0;
+  const wizardStepIndex = WIZARD_STEPS.findIndex((step) => step.id === wizardStep);
+  const activeWizardStep = WIZARD_STEPS[wizardStepIndex] ?? WIZARD_STEPS[0];
+  const wizardProgress = ((wizardStepIndex + 1) / WIZARD_STEPS.length) * 100;
+  const wizardPreviewImage = mintedCardUrl || cardImageUrl || imageUrl;
+  const isFirstWizardStep = wizardStepIndex <= 0;
+  const isLastWizardStep = wizardStepIndex === WIZARD_STEPS.length - 1;
+  const wizardCanAdvance =
+    wizardStep === "pokemon" ||
+    wizardStep === "pose" ||
+    (wizardStep === "image" && Boolean(imageUrl)) ||
+    (wizardStep === "color" && Boolean(imageUrl)) ||
+    (wizardStep === "card" && Boolean(cardImageUrl)) ||
+    wizardStep === "mint";
+  const wizardNextLabel =
+    wizardStep === "image" && !imageUrl
+      ? "Choose art"
+      : wizardStep === "color" && !cardImageUrl
+        ? "Place on card"
+        : isLastWizardStep
+          ? "Minted"
+          : "Next";
 
   function clearAllCanvases() {
     for (const canvas of [
@@ -560,6 +708,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
     undoStackRef.current = [];
     boundaryMaskRef.current = null;
+    loadedCanvasImageUrlRef.current = "";
     setCanUndo(false);
     setImageUrl("");
     setCardImageUrl("");
@@ -637,8 +786,19 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     );
     lineContext.putImageData(outlineImage, 0, 0);
     undoStackRef.current = [];
+    loadedCanvasImageUrlRef.current = nextImageUrl;
     setCanUndo(false);
   }, []);
+
+  useEffect(() => {
+    if (
+      wizardStep === "color" &&
+      imageUrl &&
+      loadedCanvasImageUrlRef.current !== imageUrl
+    ) {
+      void loadImageToCanvases(imageUrl);
+    }
+  }, [imageUrl, loadImageToCanvases, wizardStep]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -940,6 +1100,41 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     setStatus(`${selectedPokemon.name} placed on card`);
   }
 
+  function goToWizardStep(nextStep: WizardStepId) {
+    setWizardStep(nextStep);
+    setIsWizardOpen(true);
+  }
+
+  function goToPreviousWizardStep() {
+    if (isFirstWizardStep) {
+      return;
+    }
+
+    setWizardStep(WIZARD_STEPS[wizardStepIndex - 1].id);
+  }
+
+  function goToNextWizardStep() {
+    if (!wizardCanAdvance) {
+      return;
+    }
+
+    if (wizardStep === "color" && imageUrl && !cardImageUrl) {
+      placeOnCard();
+    }
+
+    if (isLastWizardStep) {
+      return;
+    }
+
+    const nextStep = WIZARD_STEPS[wizardStepIndex + 1].id;
+
+    setWizardStep(nextStep);
+
+    if (nextStep === "card") {
+      void generateCardCopy();
+    }
+  }
+
   async function loadCardAsset(src: string) {
     if (!src) {
       return null;
@@ -1023,8 +1218,14 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     context.fillText(`${attackOneName} ${attackOneDamage}`, innerX + 78, innerY + innerHeight - 288);
     context.fillText(`${attackTwoName} ${attackTwoDamage}`, innerX + 78, innerY + innerHeight - 174);
     context.font = "800 24px Arial";
-    context.fillText(`Weakness ${weakness}    Resistance ${resistance}    Retreat ${retreatCost}`, innerX + 78, innerY + innerHeight - 92);
-    context.fillText(`${cardNumber} ★`, innerX + innerWidth - 190, innerY + innerHeight - 28);
+    context.fillText(`Weakness ${weakness}    Resistance ${resistance}    Retreat ${retreatCost}`, innerX + 78, innerY + innerHeight - 104);
+    context.font = "900 28px Arial";
+    context.fillText(`Illus. ${illustratorName || "Unknown"}`, innerX + 78, innerY + innerHeight - 54);
+    context.fillText(
+      `${collectorNumberWithoutRarity(cardNumber)} ${selectedCardRarity.symbol}`.trim(),
+      innerX + innerWidth - 230,
+      innerY + innerHeight - 54,
+    );
 
     return canvas.toDataURL("image/png");
   }
@@ -1059,6 +1260,9 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
           resistance,
           retreatCost,
           cardNumber,
+          cardRarity: selectedCardRarity.label,
+          cardRaritySymbol: selectedCardRarity.symbol,
+          illustratorName,
           backgroundPrompt,
         }),
       });
@@ -1102,6 +1306,50 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     }
   }
 
+  async function generateCardCopy() {
+    setIsGeneratingCardCopy(true);
+    setStatus("Writing card attacks with AI");
+
+    try {
+      const response = await fetch("/api/card-copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pokemonName: selectedPokemon.name,
+          pokemonType: TYPE_ICON_STYLES[cardType].label,
+          hp: cardHp,
+          rarity: selectedCardRarity.label,
+          raritySymbol: selectedCardRarity.symbol,
+          pose: selectedPoseLabel,
+        }),
+      });
+      const result = await readCardCopyResponse(response);
+
+      if (!response.ok) {
+        throw new Error(result.error || "Could not generate card text.");
+      }
+
+      setAttackOneName(result.attackOneName || "Quick Strike");
+      setAttackOneDamage(result.attackOneDamage || "90");
+      setAttackTwoName(result.attackTwoName || "Brilliant Rush");
+      setAttackTwoDamage(result.attackTwoDamage || "180");
+      setWeakness(result.weakness || "x2");
+      setResistance(result.resistance || "-30");
+      setRetreatCost(result.retreatCost || "★★");
+      setCardStage(result.cardStage || "Basic");
+      setEvolvesFrom(result.evolvesFrom || selectedPokemon.name);
+      setIsExCard(Boolean(result.isExCard));
+      setCardNumber(
+        collectorNumberWithoutRarity(result.cardNumber || "001/132"),
+      );
+      setStatus("AI card attacks ready");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Card text generation failed");
+    } finally {
+      setIsGeneratingCardCopy(false);
+    }
+  }
+
   function downloadColoringPage() {
     const coloringPageImage = composeColoredPokemon(true);
 
@@ -1116,11 +1364,20 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   }
 
   function selectPokemon(pokemon: PokemonOption) {
+    setActiveType(pokemon.type);
     setSelectedPokemon(pokemon);
     setCardType(pokemon.type);
     setEvolvesFrom(pokemon.name === "Pikachu" ? "Pichu" : "");
     clearAllCanvases();
     setStatus(`Selected ${pokemon.name}`);
+  }
+
+  function selectPose(pose: PoseOption) {
+    setSelectedPose(pose.id);
+    clearAllCanvases();
+    setStatus(
+      `Selected ${selectedPokemon.name} ${pose.label.toLowerCase()}`,
+    );
   }
 
   async function selectExistingImage(image: GeneratedImage) {
@@ -1140,6 +1397,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-[#f7f9fc] text-slate-950 overscroll-none max-[720px]:static max-[720px]:min-h-dvh max-[720px]:overflow-x-hidden max-[720px]:overflow-y-auto max-[720px]:bg-gradient-to-b max-[720px]:from-white max-[720px]:to-slate-100 max-[720px]:pb-[calc(88px+env(safe-area-inset-bottom))]">
+      {false ? (
       <div className="grid h-[100dvh] min-h-0 grid-cols-[280px_minmax(0,1fr)_320px] max-[980px]:grid-cols-[250px_minmax(0,1fr)] max-[720px]:h-auto max-[720px]:min-h-dvh max-[720px]:grid-cols-1 max-[720px]:gap-3 max-[720px]:p-3">
         <aside className="flex min-h-0 flex-col overflow-hidden border-r border-slate-200 bg-white p-3 max-[720px]:order-2 max-[720px]:max-h-none max-[720px]:overflow-visible max-[720px]:rounded-[28px] max-[720px]:border max-[720px]:border-slate-200/80 max-[720px]:shadow-sm">
           <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
@@ -1153,6 +1411,15 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
               <PaintBucket aria-hidden="true" size={20} />
             </span>
           </div>
+
+          <button
+            className="mb-3 flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+            type="button"
+            onClick={() => goToWizardStep("pokemon")}
+          >
+            <Sparkles aria-hidden="true" size={17} />
+            Open guide
+          </button>
 
           <label className="mb-3 grid shrink-0 gap-2 text-xs font-black uppercase text-slate-500">
             Model
@@ -1181,13 +1448,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
                   }`}
                   type="button"
-                  onClick={() => {
-                    setSelectedPose(pose.id);
-                    clearAllCanvases();
-                    setStatus(
-                      `Selected ${selectedPokemon.name} ${pose.label.toLowerCase()}`,
-                    );
-                  }}
+                  onClick={() => selectPose(pose)}
                 >
                   {pose.label}
                 </button>
@@ -1255,6 +1516,14 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                className="flex h-11 items-center gap-2 rounded-lg border-2 border-slate-200 bg-white px-4 text-sm font-black text-slate-950 transition hover:border-slate-300"
+                type="button"
+                onClick={() => goToWizardStep(imageUrl ? "color" : "pokemon")}
+              >
+                <Sparkles aria-hidden="true" size={18} />
+                Guide
+              </button>
               <div className="relative max-[720px]:static">
                 <div className="flex h-12 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 shadow-sm">
                   {recentPaints.map((paint) => (
@@ -1874,46 +2143,692 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
           </div>
         </aside>
       </div>
+      ) : null}
 
-      <nav className="fixed inset-x-3 bottom-3 z-40 hidden items-center justify-between gap-2 rounded-full border border-slate-200/80 bg-white/94 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.20)] backdrop-blur max-[720px]:flex" aria-label="Mobile quick actions">
-        <button
-          aria-label="Open color palette"
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-slate-950 px-3 text-xs font-black text-white"
-          type="button"
-          onClick={() => setIsColorPickerOpen((isOpen) => !isOpen)}
-        >
-          <span className="size-5 rounded-full ring-1 ring-white/40" style={{ background: getPaintPreview(selectedPaint) }} />
-          Color
-        </button>
-        <button
-          aria-label="Undo"
-          className="grid size-12 place-items-center rounded-full border border-slate-200 bg-white text-slate-950 disabled:opacity-40"
-          disabled={!canUndo}
-          type="button"
-          onClick={undoFill}
-        >
-          <Undo2 aria-hidden="true" size={18} />
-        </button>
-        <button
-          aria-label="Place on card"
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-amber-400 px-3 text-xs font-black text-slate-950 disabled:opacity-40"
-          disabled={!imageUrl}
-          type="button"
-          onClick={placeOnCard}
-        >
-          <Layers aria-hidden="true" size={18} />
-          Card
-        </button>
-        <button
-          aria-label="Download PNG"
-          className="grid size-12 place-items-center rounded-full bg-slate-950 text-white disabled:opacity-40"
-          disabled={!imageUrl}
-          type="button"
-          onClick={downloadColoringPage}
-        >
-          <Download aria-hidden="true" size={18} />
-        </button>
-      </nav>
+      {isWizardOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#f7f9fc] p-0 max-[720px]:items-stretch">
+          <section
+            aria-labelledby="wizard-title"
+            aria-modal="true"
+            className="grid h-dvh w-full grid-cols-[340px_minmax(0,1fr)] overflow-hidden bg-white max-[860px]:grid-cols-1"
+            role="dialog"
+          >
+            <aside className="relative flex min-h-0 flex-col overflow-hidden bg-[#101827] p-5 text-white max-[860px]:hidden">
+              <div className="absolute inset-x-0 top-0 h-1.5" style={{ backgroundColor: selectedPokemonTypeStyle.color }} />
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/45">
+                    Pokemon Camp
+                  </p>
+                  <h2 className="mt-1 text-xl font-black">Card quest</h2>
+                </div>
+                <a
+                  className="rounded-full border border-white/15 bg-white/8 px-3 py-2 text-xs font-black text-white transition hover:bg-white/14"
+                  href="/cards"
+                >
+                  Gallery
+                </a>
+              </div>
+
+              <div className="mt-5 rounded-[22px] border border-white/12 bg-white/8 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                <div
+                  className="relative grid aspect-[4/5] place-items-center overflow-hidden rounded-[18px] border border-white/12 bg-[#f8fafc]"
+                  style={{
+                    boxShadow: `0 24px 60px ${selectedPokemonTypeStyle.color}22`,
+                  }}
+                >
+                  <div
+                    className="absolute inset-x-0 top-0 h-24 opacity-90"
+                    style={{ backgroundColor: selectedPokemonTypeStyle.color }}
+                  />
+                  <div className="absolute inset-x-5 top-5 flex items-center justify-between">
+                    <span className="rounded-full bg-white/90 px-3 py-1 text-[10px] font-black uppercase text-slate-700 shadow-sm">
+                      {selectedPoseLabel}
+                    </span>
+                    <span
+                      className="grid size-10 place-items-center rounded-full border-2 border-white text-lg font-black shadow-md"
+                      style={{
+                        backgroundColor: selectedPokemonTypeStyle.color,
+                        color: selectedPokemonTypeStyle.textColor ?? "#ffffff",
+                      }}
+                    >
+                      {selectedPokemonTypeStyle.glyph}
+                    </span>
+                  </div>
+                  {wizardPreviewImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      alt=""
+                      className="relative z-10 max-h-[62%] max-w-[74%] object-contain drop-shadow-[0_18px_16px_rgba(15,23,42,0.28)]"
+                      src={wizardPreviewImage}
+                    />
+                  ) : (
+                    <div className="relative z-10 grid size-32 place-items-center rounded-full border-4 border-white bg-slate-950 text-6xl font-black shadow-2xl">
+                      {selectedPokemonTypeStyle.glyph}
+                    </div>
+                  )}
+                  <div className="absolute inset-x-5 bottom-5 rounded-2xl border border-slate-200 bg-white/92 p-3 text-slate-950 shadow-lg">
+                    <p className="truncate text-2xl font-black leading-none">
+                      {selectedPokemon.name}
+                      {isExCard ? <span className="ml-1 text-sm italic text-pink-600">ex</span> : null}
+                    </p>
+                    <p className="mt-1 truncate text-xs font-black uppercase text-slate-400">
+                      {selectedPokemonTypeStyle.label} · {cardHp} HP
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="rounded-xl bg-white/8 p-3">
+                    <p className="text-[9px] font-black uppercase text-white/35">Pose</p>
+                    <p className="mt-1 truncate text-sm font-black">{selectedPoseLabel}</p>
+                  </div>
+                  <div className="rounded-xl bg-white/8 p-3">
+                    <p className="text-[9px] font-black uppercase text-white/35">Paint</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="size-4 rounded-full" style={{ background: getPaintPreview(selectedPaint) }} />
+                      <span className="truncate text-sm font-black">{selectedPaint.label}</span>
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-white/8 p-3">
+                    <p className="text-[9px] font-black uppercase text-white/35">Stage</p>
+                    <p className="mt-1 truncate text-sm font-black">{cardStage}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-2">
+                {WIZARD_STEPS.map((step, index) => {
+                  const isActive = step.id === wizardStep;
+                  const isComplete =
+                    index < wizardStepIndex ||
+                    (step.id === "image" && Boolean(imageUrl)) ||
+                    (step.id === "card" && Boolean(cardImageUrl)) ||
+                    (step.id === "mint" && Boolean(mintedCardUrl));
+
+                  return (
+                    <button
+                      key={`${step.id}-rail`}
+                      className={`grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${
+                        isActive
+                          ? "border-white/35 bg-white text-slate-950"
+                          : "border-white/10 bg-white/6 text-white hover:bg-white/10"
+                      }`}
+                      type="button"
+                      onClick={() => {
+                        setWizardStep(step.id);
+
+                        if (step.id === "card") {
+                          void generateCardCopy();
+                        }
+                      }}
+                    >
+                      <span
+                        className={`grid size-8 place-items-center rounded-lg text-xs font-black ${
+                          isActive ? "bg-slate-950 text-white" : "bg-white/10"
+                        }`}
+                      >
+                        {step.eyebrow}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-black">{step.label}</span>
+                        <span className={`block truncate text-[10px] font-black uppercase ${isActive ? "text-slate-400" : "text-white/35"}`}>
+                          {step.title}
+                        </span>
+                      </span>
+                      {isComplete ? <Check aria-hidden="true" size={16} /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-auto pt-5">
+                <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      backgroundColor: selectedPokemonTypeStyle.color,
+                      width: `${wizardProgress}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </aside>
+
+            <div className="flex min-h-0 flex-col bg-[#f8fafc]">
+              <header className="shrink-0 border-b border-slate-200 bg-white px-6 py-5 max-[720px]:px-4 max-[720px]:py-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
+                      {activeWizardStep.eyebrow} · {activeWizardStep.label}
+                    </p>
+                    <h2 id="wizard-title" className="mt-1 text-3xl font-black leading-tight text-slate-950 max-[520px]:text-2xl">
+                      {activeWizardStep.title}
+                    </h2>
+                    <p className="mt-1 max-w-[640px] text-sm font-bold leading-snug text-slate-500">
+                      {activeWizardStep.caption}
+                    </p>
+                  </div>
+                  <a
+                    className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:border-slate-300 hover:text-slate-950 min-[861px]:hidden"
+                    href="/cards"
+                  >
+                    Gallery
+                  </a>
+                </div>
+
+                <div className="mt-4 hidden grid-cols-6 gap-1.5 max-[860px]:grid">
+                  {WIZARD_STEPS.map((step, index) => {
+                    const isActive = step.id === wizardStep;
+                    const isComplete =
+                      index < wizardStepIndex ||
+                      (step.id === "image" && Boolean(imageUrl)) ||
+                      (step.id === "card" && Boolean(cardImageUrl)) ||
+                      (step.id === "mint" && Boolean(mintedCardUrl));
+
+                    return (
+                      <button
+                        key={`${step.id}-mobile-rail`}
+                        aria-label={step.label}
+                        className={`h-2 rounded-full transition ${
+                          isActive || isComplete ? "bg-slate-950" : "bg-slate-200"
+                        }`}
+                        type="button"
+                        onClick={() => {
+                          setWizardStep(step.id);
+
+                          if (step.id === "card") {
+                            void generateCardCopy();
+                          }
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </header>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-6 max-[720px]:p-4">
+                {wizardStep === "pokemon" ? (
+                  <div className="grid gap-5">
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {POKEMON_TYPE_GROUPS.map((group) => (
+                        <button
+                          key={`${group.id}-wizard-type`}
+                          className={`flex h-12 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-black transition ${
+                            activeType === group.id
+                              ? "border-slate-950 bg-slate-950 text-white shadow-lg shadow-slate-950/12"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                          }`}
+                          type="button"
+                          onClick={() => setActiveType(group.id)}
+                        >
+                          <span className="size-3 rounded-full" style={{ backgroundColor: group.color }} />
+                          {group.label}
+                          <span className="font-mono text-xs opacity-55">{group.pokemon.length}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 max-[980px]:grid-cols-2 max-[560px]:grid-cols-1">
+                      {activeTypeGroup.pokemon.map((pokemon) => {
+                        const typeStyle = TYPE_ICON_STYLES[pokemon.type];
+                        const isSelected =
+                          selectedPokemon.name === pokemon.name &&
+                          selectedPokemon.type === pokemon.type;
+
+                        return (
+                          <button
+                            key={`${pokemon.type}-${pokemon.name}-wizard`}
+                            className={`group relative min-h-44 overflow-hidden rounded-[18px] border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-xl ${
+                              isSelected
+                                ? "border-slate-950 bg-slate-950 text-white shadow-xl shadow-slate-950/18"
+                                : "border-slate-200 bg-white text-slate-950 hover:border-slate-300"
+                            }`}
+                            type="button"
+                            onClick={() => selectPokemon(pokemon)}
+                          >
+                            <span
+                              className="absolute right-4 top-4 grid size-12 place-items-center rounded-full border-2 border-white text-xl font-black shadow-sm"
+                              style={{
+                                backgroundColor: typeStyle.color,
+                                color: typeStyle.textColor ?? "#ffffff",
+                              }}
+                            >
+                              {typeStyle.glyph}
+                            </span>
+                            <span className="mt-16 block text-2xl font-black">{pokemon.name}</span>
+                            <span className={`mt-2 block text-xs font-black uppercase ${isSelected ? "text-white/55" : "text-slate-400"}`}>
+                              {typeStyle.label}
+                            </span>
+                            {isSelected ? (
+                              <span className="absolute bottom-4 right-4 grid size-8 place-items-center rounded-full bg-white text-slate-950">
+                                <Check aria-hidden="true" size={16} />
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                {wizardStep === "pose" ? (
+                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+                    <div className="grid grid-cols-4 gap-3 max-[980px]:grid-cols-2 max-[520px]:grid-cols-1">
+                      {POSE_OPTIONS.map((pose, index) => (
+                        <button
+                          key={`${pose.id}-wizard`}
+                          className={`group min-h-36 rounded-[18px] border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-xl ${
+                            selectedPose === pose.id
+                              ? "border-slate-950 bg-slate-950 text-white shadow-xl shadow-slate-950/16"
+                              : "border-slate-200 bg-white text-slate-950 hover:border-slate-300"
+                          }`}
+                          type="button"
+                          onClick={() => selectPose(pose)}
+                        >
+                          <span
+                            className="grid size-11 place-items-center rounded-xl text-sm font-black"
+                            style={{
+                              backgroundColor:
+                                selectedPose === pose.id
+                                  ? selectedPokemonTypeStyle.color
+                                  : "#f1f5f9",
+                              color:
+                                selectedPose === pose.id
+                                  ? selectedPokemonTypeStyle.textColor ?? "#ffffff"
+                                  : "#475569",
+                            }}
+                          >
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span className="mt-8 block text-xl font-black">{pose.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid content-start gap-3 rounded-[18px] border border-slate-200 bg-white p-4">
+                      <label className="grid gap-2 text-xs font-black uppercase text-slate-500">
+                        Model
+                        <select
+                          className="h-11 rounded-lg border-2 border-slate-200 bg-white px-3 text-sm normal-case text-slate-950"
+                          value={model}
+                          onChange={(event) => setModel(event.target.value)}
+                        >
+                          {MODEL_OPTIONS.map((option) => (
+                            <option key={`${option}-wizard`} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="rounded-2xl bg-slate-50 p-3">
+                        <p className="text-xs font-black uppercase text-slate-400">Current</p>
+                        <p className="mt-1 text-lg font-black text-slate-950">
+                          {selectedPokemon.name} · {selectedPoseLabel}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {wizardStep === "image" ? (
+                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+                    <div className="grid content-start gap-3">
+                      {hasExistingImages ? (
+                        <div className="grid grid-cols-4 gap-3 max-[980px]:grid-cols-3 max-[560px]:grid-cols-2">
+                          {existingImages.map((image, index) => (
+                            <button
+                              key={`${image.pathname}-wizard`}
+                              aria-label={`Use saved image ${index + 1}`}
+                              className={`aspect-square overflow-hidden rounded-[18px] border-2 bg-white p-3 transition hover:-translate-y-0.5 hover:shadow-xl ${
+                                image.renderUrl === imageUrl
+                                  ? "border-slate-950 shadow-xl shadow-slate-950/14"
+                                  : "border-slate-200 hover:border-slate-300"
+                              }`}
+                              type="button"
+                              onClick={() => void selectExistingImage(image)}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img alt="" className="size-full object-contain" src={image.renderUrl} />
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid min-h-80 place-items-center rounded-[22px] border border-dashed border-slate-300 bg-white text-center">
+                          {isLoadingImages ? (
+                            <Loader2 aria-hidden="true" className="animate-spin text-slate-300" size={48} />
+                          ) : (
+                            <div className="grid gap-3">
+                              <ImageIcon aria-hidden="true" className="mx-auto text-slate-300" size={56} />
+                              <p className="text-sm font-black uppercase text-slate-400">No saved sketch yet</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="grid content-start gap-3">
+                      <button
+                        className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-[22px] bg-slate-950 px-4 text-center text-white shadow-xl shadow-slate-950/18 transition hover:bg-slate-800 disabled:opacity-45"
+                        disabled={isGenerating}
+                        type="button"
+                        onClick={() => void generateColoringPagePng(selectedPokemon.name)}
+                      >
+                        {isGenerating ? <Loader2 aria-hidden="true" className="animate-spin" size={24} /> : <Sparkles aria-hidden="true" size={24} />}
+                        <span className="text-lg font-black">{hasExistingImages ? "New sketch" : "Generate sketch"}</span>
+                      </button>
+                      <div className="rounded-[18px] border border-slate-200 bg-white p-4">
+                        <p className="text-xs font-black uppercase text-slate-400">Line art</p>
+                        <p className="mt-1 text-lg font-black text-slate-950">
+                          {selectedPokemon.name}
+                        </p>
+                        <p className="text-sm font-bold text-slate-500">{selectedPoseLabel}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {wizardStep === "color" ? (
+                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
+                    <div className="grid content-start gap-3">
+                      <div className="relative aspect-square overflow-hidden rounded-[24px] border-2 border-slate-950 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.16)]">
+                        <canvas
+                          ref={maskCanvasRef}
+                          className="hidden"
+                          height={CANVAS_SIZE}
+                          width={CANVAS_SIZE}
+                        />
+                        <canvas
+                          ref={colorCanvasRef}
+                          className="absolute inset-0 size-full"
+                          height={CANVAS_SIZE}
+                          width={CANVAS_SIZE}
+                        />
+                        <canvas
+                          ref={lineCanvasRef}
+                          aria-label="Pokemon coloring canvas"
+                          className="absolute inset-0 size-full cursor-crosshair touch-none"
+                          height={CANVAS_SIZE}
+                          width={CANVAS_SIZE}
+                          onPointerDown={handleCanvasPointerDown}
+                        />
+                        {!imageUrl ? (
+                          <div className="absolute inset-0 grid place-items-center bg-white text-center">
+                            <div className="grid gap-3">
+                              <ImageIcon aria-hidden="true" className="mx-auto text-slate-300" size={56} />
+                              <button
+                                className="flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white disabled:opacity-50"
+                                disabled={isGenerating}
+                                type="button"
+                                onClick={() => void generateColoringPagePng(selectedPokemon.name)}
+                              >
+                                {isGenerating ? (
+                                  <Loader2 aria-hidden="true" className="animate-spin" size={18} />
+                                ) : (
+                                  <Plus aria-hidden="true" size={18} />
+                                )}
+                                Generate line art
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-black text-slate-500">
+                        <span className="truncate">{status}</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            aria-label="Undo"
+                            className="grid size-10 place-items-center rounded-xl border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
+                            disabled={!canUndo}
+                            type="button"
+                            onClick={undoFill}
+                          >
+                            <Undo2 aria-hidden="true" size={17} />
+                          </button>
+                          <button
+                            aria-label="Clear colors"
+                            className="grid size-10 place-items-center rounded-xl border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
+                            disabled={!imageUrl}
+                            type="button"
+                            onClick={clearColors}
+                          >
+                            <Eraser aria-hidden="true" size={17} />
+                          </button>
+                          <button
+                            aria-label="Download PNG"
+                            className="grid size-10 place-items-center rounded-xl bg-slate-950 text-white disabled:opacity-40"
+                            disabled={!imageUrl}
+                            type="button"
+                            onClick={downloadColoringPage}
+                          >
+                            <Download aria-hidden="true" size={17} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid content-start gap-4 rounded-[22px] border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="grid size-16 shrink-0 place-items-center rounded-2xl border border-slate-200 shadow-inner"
+                          style={{ background: getPaintPreview(selectedPaint) }}
+                        >
+                          {selectedPaint.rarity ? <Sparkles aria-hidden="true" className="text-white drop-shadow" size={20} /> : null}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-black uppercase text-slate-400">Paint</p>
+                          <p className="truncate text-xl font-black text-slate-950">{selectedPaint.label}</p>
+                        </div>
+                        <input
+                          aria-label="Custom color"
+                          className="ml-auto size-12 shrink-0 rounded-xl border border-slate-200 bg-white p-1"
+                          type="color"
+                          value={customColor}
+                          onChange={(event) => {
+                            const nextColor = event.target.value;
+                            setCustomColor(nextColor);
+                            selectPaint({
+                              id: `wizard-custom-${nextColor}`,
+                              label: "Custom color",
+                              color: nextColor,
+                            });
+                          }}
+                        />
+                      </div>
+
+                      <div className="grid gap-4">
+                        {COLOR_PALETTES.map((palette) => (
+                          <div key={`${palette.label}-wizard`} className="grid gap-2">
+                            <p className="px-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                              {palette.label}
+                            </p>
+                            <div className={palette.label === "Rare Sheens" ? "grid grid-cols-5 gap-2" : "grid grid-cols-8 gap-2 max-[560px]:grid-cols-4"}>
+                              {palette.colors.map((paint) => (
+                                <button
+                                  key={`${paint.id}-wizard`}
+                                  aria-label={`Use ${paint.label}`}
+                                  className={`relative aspect-square rounded-xl border-2 transition hover:scale-105 ${
+                                    selectedPaint.id === paint.id ? "border-slate-950" : "border-white"
+                                  } shadow-sm ring-1 ring-slate-200`}
+                                  style={{ background: getPaintPreview(paint) }}
+                                  type="button"
+                                  onClick={() => selectPaint(paint)}
+                                >
+                                  {paint.rarity ? (
+                                    <Sparkles aria-hidden="true" className="absolute bottom-1 right-1 rounded-full bg-slate-950/85 p-0.5 text-white" size={13} />
+                                  ) : null}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {wizardStep === "card" ? (
+                  <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+                    <div
+                      className="mx-auto w-full max-w-[240px] rounded-[22px] p-2 shadow-xl shadow-slate-950/14"
+                      style={{ backgroundColor: cardBorderColor }}
+                    >
+                      <div className="grid aspect-[63/88] place-items-center overflow-hidden rounded-[18px] border-2 border-white/50 bg-slate-900">
+                        {cardImageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img alt="Card preview Pokemon" className="max-h-[74%] max-w-[82%] object-contain drop-shadow-[0_16px_14px_rgba(0,0,0,0.35)]" src={cardImageUrl} />
+                        ) : imageUrl ? (
+                          <button
+                            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-black text-slate-950"
+                            type="button"
+                            onClick={placeOnCard}
+                          >
+                            <Layers aria-hidden="true" size={18} />
+                            Place art
+                          </button>
+                        ) : (
+                          <ImageIcon aria-hidden="true" className="text-slate-500" size={44} />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid content-start gap-4">
+                      <div className="grid grid-cols-2 gap-3 max-[620px]:grid-cols-1">
+                        <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
+                          HP
+                          <input className="h-11 rounded-lg border-2 border-slate-200 px-3 text-slate-950" min="10" max="340" step="10" type="number" value={cardHp} onChange={(event) => setCardHp(Number(event.target.value) || 10)} />
+                        </label>
+                        <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
+                          Type
+                          <select className="h-11 rounded-lg border-2 border-slate-200 bg-white px-3 text-slate-950" value={cardType} onChange={(event) => setCardType(event.target.value as PokemonType)}>
+                            {POKEMON_TYPE_GROUPS.map((group) => (
+                              <option key={`${group.id}-wizard-card-type`} value={group.id}>{group.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className="grid gap-2 rounded-[18px] border border-slate-200 bg-white p-4">
+                        <p className="text-xs font-black uppercase text-slate-500">Rarity mark</p>
+                        <div className="grid grid-cols-4 gap-2 max-[620px]:grid-cols-2">
+                          {CARD_RARITY_OPTIONS.map((rarity) => (
+                            <button
+                              key={rarity.id}
+                              className={`flex min-h-16 items-center gap-3 rounded-xl border-2 p-3 text-left transition ${
+                                cardRarity === rarity.id
+                                  ? "border-slate-950 bg-slate-950 text-white"
+                                  : "border-slate-200 bg-white text-slate-950 hover:border-slate-300"
+                              }`}
+                              type="button"
+                              onClick={() => setCardRarity(rarity.id)}
+                            >
+                              <span
+                                className="grid size-9 shrink-0 place-items-center rounded-full text-lg font-black"
+                                style={{
+                                  backgroundColor: rarity.accent,
+                                  color: "#ffffff",
+                                }}
+                              >
+                                {rarity.symbol}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-black">{rarity.label}</span>
+                                <span className={`block text-[10px] font-black uppercase ${cardRarity === rarity.id ? "text-white/55" : "text-slate-400"}`}>
+                                  {rarity.symbol}
+                                </span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 max-[620px]:grid-cols-1">
+                        <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
+                          Illustrator
+                          <input className="h-11 rounded-lg border-2 border-slate-200 px-3 normal-case text-slate-950" value={illustratorName} onChange={(event) => setIllustratorName(event.target.value)} />
+                        </label>
+                        <button className="flex h-11 items-center justify-center gap-2 self-end rounded-lg bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-40" disabled={isGeneratingCardCopy} type="button" onClick={() => void generateCardCopy()}>
+                          {isGeneratingCardCopy ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : <Sparkles aria-hidden="true" size={16} />}
+                          Regenerate attacks
+                        </button>
+                      </div>
+
+                      <div className="grid gap-2 rounded-[18px] border border-slate-200 bg-white p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-black uppercase text-slate-500">AI card text</p>
+                          {isGeneratingCardCopy ? (
+                            <Loader2 aria-hidden="true" className="animate-spin text-slate-400" size={16} />
+                          ) : null}
+                        </div>
+                        <div className="grid grid-cols-[minmax(0,1fr)_64px] gap-2 text-sm font-black text-slate-950">
+                          <span className="truncate">{attackOneName}</span>
+                          <span className="text-right">{attackOneDamage}</span>
+                          <span className="truncate">{attackTwoName}</span>
+                          <span className="text-right">{attackTwoDamage}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {wizardStep === "mint" ? (
+                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+                    <div className="grid min-h-80 place-items-center rounded-[22px] border border-slate-200 bg-white p-4">
+                      {mintedCardUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img alt="Minted realistic Pokemon card" className="max-h-[520px] rounded-[18px] border border-lime-200 shadow-sm" src={mintedCardUrl} />
+                      ) : cardImageUrl ? (
+                        <div className="text-center">
+                          <Sparkles aria-hidden="true" className="mx-auto text-lime-500" size={52} />
+                          <p className="mt-3 text-xl font-black text-slate-950">{selectedPokemon.name} card ready</p>
+                        </div>
+                      ) : (
+                        <ImageIcon aria-hidden="true" className="text-slate-300" size={52} />
+                      )}
+                    </div>
+                    <div className="grid content-start gap-3">
+                      <button className="flex h-12 items-center justify-center gap-2 rounded-[14px] bg-lime-400 px-4 text-sm font-black text-slate-950 shadow-[0_12px_30px_rgba(132,204,22,0.25)] transition hover:bg-lime-300 disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none" disabled={!cardImageUrl || isMintingCard} type="button" onClick={() => void mintRealisticCard()}>
+                        {isMintingCard ? <Loader2 aria-hidden="true" className="animate-spin" size={18} /> : <Sparkles aria-hidden="true" size={18} />}
+                        {isMintingCard ? "Minting card" : "Mint card"}
+                      </button>
+                      <a className="flex h-11 items-center justify-center rounded-[14px] border-2 border-slate-200 bg-white px-4 text-sm font-black text-slate-950 transition hover:border-slate-300" href="/cards">
+                        Gallery
+                      </a>
+                      {mintedCardUrl ? (
+                        <a className="flex h-11 items-center justify-center rounded-[14px] bg-slate-950 px-4 text-sm font-black text-white" href={mintedCardUrl} download>
+                          Download
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-6 py-4 max-[720px]:px-4">
+                <button
+                  className="flex h-11 items-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-4 text-sm font-black text-slate-950 transition hover:border-slate-300 disabled:opacity-40"
+                  disabled={isFirstWizardStep}
+                  type="button"
+                  onClick={goToPreviousWizardStep}
+                >
+                  <ChevronLeft aria-hidden="true" size={18} />
+                  Back
+                </button>
+                <div className="min-w-0 truncate text-center text-xs font-black uppercase text-slate-400 max-[520px]:hidden">
+                  {selectedPokemon.name} · {selectedPoseLabel}
+                </div>
+                <button
+                  className="flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-500"
+                  disabled={!wizardCanAdvance}
+                  type="button"
+                  onClick={goToNextWizardStep}
+                >
+                  {wizardNextLabel}
+                  <ChevronRight aria-hidden="true" size={18} />
+                </button>
+              </footer>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
