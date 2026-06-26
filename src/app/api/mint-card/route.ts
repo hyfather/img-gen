@@ -85,7 +85,6 @@ function getBase64Image(image: OpenRouterImage) {
   return "";
 }
 
-
 export async function POST(request: Request) {
   try {
     const apiKey = process.env.OPENROUTER_API_KEY;
