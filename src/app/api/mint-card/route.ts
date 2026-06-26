@@ -1,11 +1,9 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { listMintedCards, saveMintedCard } from "@/lib/minted-cards";
 
 export const runtime = "nodejs";
 
 const OPENROUTER_IMAGES_URL = "https://openrouter.ai/api/v1/images";
 const DEFAULT_MODEL = "google/gemini-2.5-flash-image";
-const GENERATED_DIR = "generated-minted-cards";
 
 type CardAttack = { name?: unknown; damage?: unknown };
 type MintCardRequest = {
@@ -87,22 +85,6 @@ function getBase64Image(image: OpenRouterImage) {
   return "";
 }
 
-function slugify(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-}
-
-async function saveGeneratedImageLocally(pokemonName: string, base64: string) {
-  if (process.env.VERCEL === "1") return "";
-  const filename = `${slugify(pokemonName) || "minted-card"}-${Date.now()}.png`;
-  const directory = join(process.cwd(), "public", GENERATED_DIR);
-  try {
-    await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, filename), Buffer.from(base64, "base64"));
-    return `/${GENERATED_DIR}/${filename}`;
-  } catch {
-    return "";
-  }
-}
 
 export async function POST(request: Request) {
   try {
@@ -158,9 +140,23 @@ export async function POST(request: Request) {
     const base64 = result?.data?.[0] ? getBase64Image(result.data[0]) : "";
     if (!base64) return jsonError("OpenRouter did not return PNG image data.", 502);
 
-    const savedImageUrl = await saveGeneratedImageLocally(textValue(body.pokemonName, "minted-card"), base64);
-    return Response.json({ imageUrl: savedImageUrl || `data:image/png;base64,${base64}`, model });
+    const card = await saveMintedCard({
+      base64,
+      pokemonName: textValue(body.pokemonName, "minted-card"),
+    });
+
+    return Response.json({ imageUrl: card.renderUrl, card, model });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Failed to mint the realistic card.");
+  }
+}
+
+export async function GET() {
+  try {
+    return Response.json({ cards: await listMintedCards() });
+  } catch (error) {
+    return jsonError(
+      error instanceof Error ? error.message : "Failed to load minted cards.",
+    );
   }
 }
