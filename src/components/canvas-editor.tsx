@@ -90,6 +90,7 @@ type WizardStepId =
   | "pose"
   | "image"
   | "color"
+  | "stats"
   | "card"
   | "mint";
 
@@ -297,16 +298,23 @@ const WIZARD_STEPS: WizardStep[] = [
     caption: "Choose a paint, then hop to the canvas for flood-fill color.",
   },
   {
+    id: "stats",
+    label: "Stats",
+    eyebrow: "05",
+    title: "Set the stats",
+    caption: "Choose HP, type, rarity, and illustrator before the card is staged.",
+  },
+  {
     id: "card",
     label: "Card",
-    eyebrow: "05",
+    eyebrow: "06",
     title: "Stage the card",
-    caption: "Place the finished art and tune the headline card details.",
+    caption: "Place the finished art and review the generated attack text.",
   },
   {
     id: "mint",
     label: "Mint",
-    eyebrow: "06",
+    eyebrow: "07",
     title: "Make it real",
     caption: "Save the polished card render to the gallery.",
   },
@@ -318,6 +326,10 @@ const CARD_RARITY_OPTIONS: CardRarityOption[] = [
   { id: "ultra-rare", label: "Ultra rare", symbol: "✦", accent: "#db2777" },
 ];
 const DEFAULT_CARD_RARITY = CARD_RARITY_OPTIONS[0];
+
+function clampCardHp(value: number) {
+  return Math.min(999999, Math.max(10, Math.round(value) || 10));
+}
 
 function loadImage(src: string) {
   const image = new Image();
@@ -632,6 +644,9 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const [imageUrl, setImageUrl] = useState("");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [existingImages, setExistingImages] = useState<GeneratedImage[]>([]);
+  const [poseImagePreviews, setPoseImagePreviews] = useState<
+    Record<string, GeneratedImage | null | undefined>
+  >({});
   const [status, setStatus] = useState("Choose a Pokemon");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingImages, setIsLoadingImages] = useState(false);
@@ -682,6 +697,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     wizardStep === "pose" ||
     (wizardStep === "image" && Boolean(imageUrl)) ||
     (wizardStep === "color" && Boolean(imageUrl)) ||
+    wizardStep === "stats" ||
     (wizardStep === "card" && Boolean(cardImageUrl)) ||
     wizardStep === "mint";
   const wizardNextLabel =
@@ -803,6 +819,47 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   useEffect(() => {
     const controller = new AbortController();
 
+    async function loadPosePreviews() {
+      setPoseImagePreviews({});
+
+      const previews = await Promise.all(
+        POSE_OPTIONS.map(async (pose) => {
+          try {
+            const params = new URLSearchParams({
+              pokemonName: selectedPokemon.name,
+              pose: pose.id,
+            });
+            const response = await fetch(`/api/coloring-page?${params}`, {
+              signal: controller.signal,
+            });
+            const result = await readImagesResponse(response);
+
+            if (!response.ok) {
+              throw new Error(result.error || "Could not load saved images.");
+            }
+
+            return [pose.id, result.images?.[0] ?? null] as const;
+          } catch {
+            return [pose.id, null] as const;
+          }
+        }),
+      );
+
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      setPoseImagePreviews(Object.fromEntries(previews));
+    }
+
+    void loadPosePreviews();
+
+    return () => controller.abort();
+  }, [selectedPokemon.name]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
     async function loadExistingImages() {
       setIsLoadingImages(true);
       setExistingImages([]);
@@ -831,23 +888,46 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
         const images = result.images ?? [];
         setExistingImages(images);
 
-        if (images[0]) {
-          await loadImageToCanvases(images[0].renderUrl);
+        let selectedSavedImage: GeneratedImage | null = null;
 
+        for (const savedImage of images) {
+          try {
+            await loadImageToCanvases(savedImage.renderUrl);
+            selectedSavedImage = savedImage;
+            break;
+          } catch {
+            // Try the next saved image; older local files may have been removed.
+          }
+        }
+
+        if (selectedSavedImage) {
           if (controller.signal.aborted) {
             return;
           }
 
-          setImageUrl(images[0].renderUrl);
+          setImageUrl(selectedSavedImage.renderUrl);
+          setPoseImagePreviews((previews) => ({
+            ...previews,
+            [selectedPose]: selectedSavedImage,
+          }));
           setCardImageUrl("");
           setMintedCardUrl("");
           setStatus(
             `Showing saved ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()}`,
           );
         } else {
+          setImageUrl("");
+          setCardImageUrl("");
+          setMintedCardUrl("");
           setStatus(
-            `Selected ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()}`,
+            images.length
+              ? `Saved ${selectedPokemon.name} art is unavailable`
+              : `No saved ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()} art found`,
           );
+
+          if (wizardStep === "image" && !controller.signal.aborted) {
+            await generateColoringPagePng(selectedPokemon.name);
+          }
         }
       } catch (error) {
         if (controller.signal.aborted) {
@@ -865,7 +945,10 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     void loadExistingImages();
 
     return () => controller.abort();
-  }, [loadImageToCanvases, selectedPokemon.name, selectedPose, selectedPoseLabel]);
+    // generateColoringPagePng intentionally stays out of this dependency list;
+    // this effect is keyed to the selected Pokemon/pose lookup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadImageToCanvases, selectedPokemon.name, selectedPose, selectedPoseLabel, wizardStep]);
 
   async function generateColoringPagePng(pokemonName: string) {
     const poseLabel = selectedPoseLabel;
@@ -899,6 +982,10 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
           result.image as GeneratedImage,
           ...images.filter((image) => image.pathname !== result.image?.pathname),
         ]);
+        setPoseImagePreviews((previews) => ({
+          ...previews,
+          [selectedPose]: result.image as GeneratedImage,
+        }));
       }
       setStatus(`${pokemonName} ${poseLabel.toLowerCase()} ready`);
     } catch (error) {
@@ -1090,17 +1177,25 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
   function placeOnCard() {
     const composedImage = composeColoredPokemon();
+    const nextCardImage = composedImage || imageUrl;
 
-    if (!composedImage) {
-      return;
+    if (!nextCardImage) {
+      setStatus("Choose or generate line art before placing it on a card.");
+      return false;
     }
 
-    setCardImageUrl(composedImage);
+    setCardImageUrl(nextCardImage);
     setMintedCardUrl("");
     setStatus(`${selectedPokemon.name} placed on card`);
+    return true;
   }
 
   function goToWizardStep(nextStep: WizardStepId) {
+    if (nextStep === "card" && imageUrl) {
+      placeOnCard();
+      void generateCardCopy();
+    }
+
     setWizardStep(nextStep);
     setIsWizardOpen(true);
   }
@@ -1118,7 +1213,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
       return;
     }
 
-    if (wizardStep === "color" && imageUrl && !cardImageUrl) {
+    if (wizardStep === "color" && imageUrl) {
       placeOnCard();
     }
 
@@ -1128,11 +1223,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
     const nextStep = WIZARD_STEPS[wizardStepIndex + 1].id;
 
-    setWizardStep(nextStep);
-
-    if (nextStep === "card") {
-      void generateCardCopy();
-    }
+    goToWizardStep(nextStep);
   }
 
   async function loadCardAsset(src: string) {
@@ -1368,12 +1459,21 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     setSelectedPokemon(pokemon);
     setCardType(pokemon.type);
     setEvolvesFrom(pokemon.name === "Pikachu" ? "Pichu" : "");
+    setImageUrl("");
+    setCardImageUrl("");
+    setMintedCardUrl("");
+    setExistingImages([]);
+    setPoseImagePreviews({});
     clearAllCanvases();
     setStatus(`Selected ${pokemon.name}`);
   }
 
   function selectPose(pose: PoseOption) {
     setSelectedPose(pose.id);
+    setImageUrl("");
+    setCardImageUrl("");
+    setMintedCardUrl("");
+    setExistingImages([]);
     clearAllCanvases();
     setStatus(
       `Selected ${selectedPokemon.name} ${pose.label.toLowerCase()}`,
@@ -2255,13 +2355,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                           : "border-white/10 bg-white/6 text-white hover:bg-white/10"
                       }`}
                       type="button"
-                      onClick={() => {
-                        setWizardStep(step.id);
-
-                        if (step.id === "card") {
-                          void generateCardCopy();
-                        }
-                      }}
+                      onClick={() => goToWizardStep(step.id)}
                     >
                       <span
                         className={`grid size-8 place-items-center rounded-lg text-xs font-black ${
@@ -2317,7 +2411,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                   </a>
                 </div>
 
-                <div className="mt-4 hidden grid-cols-6 gap-1.5 max-[860px]:grid">
+                <div className="mt-4 hidden grid-cols-7 gap-1.5 max-[860px]:grid">
                   {WIZARD_STEPS.map((step, index) => {
                     const isActive = step.id === wizardStep;
                     const isComplete =
@@ -2334,13 +2428,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                           isActive || isComplete ? "bg-slate-950" : "bg-slate-200"
                         }`}
                         type="button"
-                        onClick={() => {
-                          setWizardStep(step.id);
-
-                          if (step.id === "card") {
-                            void generateCardCopy();
-                          }
-                        }}
+                        onClick={() => goToWizardStep(step.id)}
                       />
                     );
                   })}
@@ -2415,35 +2503,66 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                 {wizardStep === "pose" ? (
                   <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
                     <div className="grid grid-cols-4 gap-3 max-[980px]:grid-cols-2 max-[520px]:grid-cols-1">
-                      {POSE_OPTIONS.map((pose, index) => (
-                        <button
-                          key={`${pose.id}-wizard`}
-                          className={`group min-h-36 rounded-[18px] border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-xl ${
-                            selectedPose === pose.id
-                              ? "border-slate-950 bg-slate-950 text-white shadow-xl shadow-slate-950/16"
-                              : "border-slate-200 bg-white text-slate-950 hover:border-slate-300"
-                          }`}
-                          type="button"
-                          onClick={() => selectPose(pose)}
-                        >
-                          <span
-                            className="grid size-11 place-items-center rounded-xl text-sm font-black"
-                            style={{
-                              backgroundColor:
-                                selectedPose === pose.id
-                                  ? selectedPokemonTypeStyle.color
-                                  : "#f1f5f9",
-                              color:
-                                selectedPose === pose.id
-                                  ? selectedPokemonTypeStyle.textColor ?? "#ffffff"
-                                  : "#475569",
-                            }}
+                      {POSE_OPTIONS.map((pose, index) => {
+                        const posePreview = poseImagePreviews[pose.id];
+                        const isSelectedPose = selectedPose === pose.id;
+
+                        return (
+                          <button
+                            key={`${pose.id}-wizard`}
+                            className={`group min-h-44 rounded-[18px] border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-xl ${
+                              isSelectedPose
+                                ? "border-slate-950 bg-slate-950 text-white shadow-xl shadow-slate-950/16"
+                                : "border-slate-200 bg-white text-slate-950 hover:border-slate-300"
+                            }`}
+                            type="button"
+                            onClick={() => selectPose(pose)}
                           >
-                            {String(index + 1).padStart(2, "0")}
-                          </span>
-                          <span className="mt-8 block text-xl font-black">{pose.label}</span>
-                        </button>
-                      ))}
+                            <span
+                              className={`grid aspect-square w-full place-items-center overflow-hidden rounded-[14px] border ${
+                                isSelectedPose ? "border-white/15 bg-white" : "border-slate-100 bg-slate-50"
+                              }`}
+                            >
+                              {posePreview ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  alt={`${pose.label} saved line art`}
+                                  className="size-full object-contain p-2"
+                                  src={posePreview.renderUrl}
+                                />
+                              ) : (
+                                <span
+                                  className="grid size-11 place-items-center rounded-xl text-sm font-black"
+                                  style={{
+                                    backgroundColor: isSelectedPose
+                                      ? selectedPokemonTypeStyle.color
+                                      : "#e2e8f0",
+                                    color: isSelectedPose
+                                      ? selectedPokemonTypeStyle.textColor ?? "#ffffff"
+                                      : "#475569",
+                                  }}
+                                >
+                                  {String(index + 1).padStart(2, "0")}
+                                </span>
+                              )}
+                            </span>
+                            <span className="mt-3 flex items-center justify-between gap-2">
+                              <span className="min-w-0 truncate text-xl font-black">{pose.label}</span>
+                              {posePreview ? (
+                                <span
+                                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase ${
+                                    isSelectedPose
+                                      ? "bg-white/15 text-white"
+                                      : "bg-lime-100 text-lime-700"
+                                  }`}
+                                >
+                                  Saved
+                                </span>
+                              ) : null}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                     <div className="grid content-start gap-3 rounded-[18px] border border-slate-200 bg-white p-4">
                       <label className="grid gap-2 text-xs font-black uppercase text-slate-500">
@@ -2471,56 +2590,86 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                 ) : null}
 
                 {wizardStep === "image" ? (
-                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-                    <div className="grid content-start gap-3">
-                      {hasExistingImages ? (
-                        <div className="grid grid-cols-4 gap-3 max-[980px]:grid-cols-3 max-[560px]:grid-cols-2">
-                          {existingImages.map((image, index) => (
-                            <button
-                              key={`${image.pathname}-wizard`}
-                              aria-label={`Use saved image ${index + 1}`}
-                              className={`aspect-square overflow-hidden rounded-[18px] border-2 bg-white p-3 transition hover:-translate-y-0.5 hover:shadow-xl ${
-                                image.renderUrl === imageUrl
-                                  ? "border-slate-950 shadow-xl shadow-slate-950/14"
-                                  : "border-slate-200 hover:border-slate-300"
-                              }`}
-                              type="button"
-                              onClick={() => void selectExistingImage(image)}
-                            >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img alt="" className="size-full object-contain" src={image.renderUrl} />
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="grid min-h-80 place-items-center rounded-[22px] border border-dashed border-slate-300 bg-white text-center">
-                          {isLoadingImages ? (
-                            <Loader2 aria-hidden="true" className="animate-spin text-slate-300" size={48} />
+                  <div className="grid gap-5">
+                    <div className="rounded-[22px] border border-slate-200 bg-white p-3 shadow-sm">
+                      <div className="flex gap-3 overflow-x-auto overscroll-x-contain pb-1">
+                        <button
+                          aria-label="Create new line art"
+                          className="grid h-24 w-24 shrink-0 place-items-center rounded-2xl border-2 border-slate-950 bg-slate-950 text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 disabled:opacity-45"
+                          disabled={isGenerating}
+                          type="button"
+                          onClick={() => void generateColoringPagePng(selectedPokemon.name)}
+                        >
+                          {isGenerating ? (
+                            <Loader2 aria-hidden="true" className="animate-spin" size={24} />
                           ) : (
-                            <div className="grid gap-3">
-                              <ImageIcon aria-hidden="true" className="mx-auto text-slate-300" size={56} />
-                              <p className="text-sm font-black uppercase text-slate-400">No saved sketch yet</p>
-                            </div>
+                            <Sparkles aria-hidden="true" size={24} />
                           )}
-                        </div>
-                      )}
+                        </button>
+                        {existingImages.map((image, index) => (
+                          <button
+                            key={`${image.pathname}-wizard-ribbon`}
+                            aria-label={`Use saved image ${index + 1}`}
+                            className={`h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-2 bg-white p-2 transition hover:-translate-y-0.5 ${
+                              image.renderUrl === imageUrl
+                                ? "border-slate-950 shadow-lg shadow-slate-950/12"
+                                : "border-slate-200 hover:border-slate-300"
+                            }`}
+                            type="button"
+                            onClick={() => void selectExistingImage(image)}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img alt="" className="size-full object-contain" src={image.renderUrl} />
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="grid content-start gap-3">
-                      <button
-                        className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-[22px] bg-slate-950 px-4 text-center text-white shadow-xl shadow-slate-950/18 transition hover:bg-slate-800 disabled:opacity-45"
-                        disabled={isGenerating}
-                        type="button"
-                        onClick={() => void generateColoringPagePng(selectedPokemon.name)}
-                      >
-                        {isGenerating ? <Loader2 aria-hidden="true" className="animate-spin" size={24} /> : <Sparkles aria-hidden="true" size={24} />}
-                        <span className="text-lg font-black">{hasExistingImages ? "New sketch" : "Generate sketch"}</span>
-                      </button>
-                      <div className="rounded-[18px] border border-slate-200 bg-white p-4">
-                        <p className="text-xs font-black uppercase text-slate-400">Line art</p>
-                        <p className="mt-1 text-lg font-black text-slate-950">
-                          {selectedPokemon.name}
-                        </p>
-                        <p className="text-sm font-bold text-slate-500">{selectedPoseLabel}</p>
+
+                    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+                      <div className="grid min-h-[420px] place-items-center rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+                        {imageUrl ? (
+                          <div className="grid w-full max-w-[520px] gap-5 text-center">
+                            <div className="mx-auto grid aspect-square w-full max-w-[420px] place-items-center rounded-[24px] bg-slate-50 p-5">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img alt="" className="max-h-full max-w-full object-contain" src={imageUrl} />
+                            </div>
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-wide text-slate-400">Line art ready</p>
+                              <p className="mt-1 text-2xl font-black text-slate-950">{selectedPokemon.name}</p>
+                              <p className="text-sm font-bold text-slate-500">{selectedPoseLabel}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid gap-3 text-center">
+                            {isLoadingImages || isGenerating ? (
+                              <Loader2 aria-hidden="true" className="mx-auto animate-spin text-slate-300" size={52} />
+                            ) : (
+                              <ImageIcon aria-hidden="true" className="mx-auto text-slate-300" size={56} />
+                            )}
+                            <p className="text-sm font-black uppercase text-slate-400">
+                              {isGenerating ? "Generating sketch" : "Finding sketch"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid content-start gap-3">
+                        <button
+                          className="flex h-14 items-center justify-center gap-2 rounded-[18px] bg-slate-950 px-4 text-sm font-black text-white shadow-xl shadow-slate-950/16 transition hover:bg-slate-800 disabled:opacity-45"
+                          disabled={!imageUrl}
+                          type="button"
+                          onClick={() => goToWizardStep("color")}
+                        >
+                          <PaintBucket aria-hidden="true" size={18} />
+                          Color this art
+                        </button>
+                        <div className="rounded-[18px] border border-slate-200 bg-white p-4">
+                          <p className="text-xs font-black uppercase text-slate-400">Selected</p>
+                          <p className="mt-1 text-lg font-black text-slate-950">
+                            {selectedPokemon.name}
+                          </p>
+                          <p className="text-sm font-bold text-slate-500">{selectedPoseLabel}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2665,44 +2814,67 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                   </div>
                 ) : null}
 
-                {wizardStep === "card" ? (
-                  <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
-                    <div
-                      className="mx-auto w-full max-w-[240px] rounded-[22px] p-2 shadow-xl shadow-slate-950/14"
-                      style={{ backgroundColor: cardBorderColor }}
-                    >
-                      <div className="grid aspect-[63/88] place-items-center overflow-hidden rounded-[18px] border-2 border-white/50 bg-slate-900">
-                        {cardImageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img alt="Card preview Pokemon" className="max-h-[74%] max-w-[82%] object-contain drop-shadow-[0_16px_14px_rgba(0,0,0,0.35)]" src={cardImageUrl} />
-                        ) : imageUrl ? (
-                          <button
-                            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-black text-slate-950"
-                            type="button"
-                            onClick={placeOnCard}
-                          >
-                            <Layers aria-hidden="true" size={18} />
-                            Place art
-                          </button>
-                        ) : (
-                          <ImageIcon aria-hidden="true" className="text-slate-500" size={44} />
-                        )}
-                      </div>
-                    </div>
-
+                {wizardStep === "stats" ? (
+                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
                     <div className="grid content-start gap-4">
-                      <div className="grid grid-cols-2 gap-3 max-[620px]:grid-cols-1">
-                        <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
-                          HP
-                          <input className="h-11 rounded-lg border-2 border-slate-200 px-3 text-slate-950" min="10" max="340" step="10" type="number" value={cardHp} onChange={(event) => setCardHp(Number(event.target.value) || 10)} />
+                      <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-xs font-black uppercase text-slate-400">Hit points</p>
+                            <p className="mt-1 text-5xl font-black leading-none text-slate-950">{cardHp}</p>
+                          </div>
+                          <span
+                            aria-label={`${cardTypeStyle.label} energy`}
+                            className="grid size-16 place-items-center rounded-full border-4 border-white text-2xl font-black shadow-[inset_0_2px_8px_rgba(255,255,255,0.65),0_8px_18px_rgba(15,23,42,0.18)]"
+                            style={{
+                              backgroundColor: cardTypeStyle.color,
+                              color: cardTypeStyle.textColor ?? "#ffffff",
+                            }}
+                          >
+                            {cardTypeStyle.glyph}
+                          </span>
+                        </div>
+                        <label className="mt-4 grid gap-1 text-xs font-black uppercase text-slate-500">
+                          Exact HP
+                          <input
+                            aria-label="Exact HP"
+                            className="h-11 rounded-lg border-2 border-slate-200 px-3 text-base font-black normal-case text-slate-950"
+                            inputMode="numeric"
+                            max="999999"
+                            min="10"
+                            type="number"
+                            value={cardHp}
+                            onChange={(event) => setCardHp(clampCardHp(Number(event.target.value)))}
+                          />
                         </label>
+                        <input
+                          aria-label="Card HP"
+                          className="mt-5 w-full accent-slate-950"
+                          min="10"
+                          max="999999"
+                          step="1"
+                          type="range"
+                          value={cardHp}
+                          onChange={(event) => setCardHp(clampCardHp(Number(event.target.value)))}
+                        />
+                        <div className="mt-2 flex justify-between text-[10px] font-black uppercase text-slate-400">
+                          <span>10</span>
+                          <span>999999</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 max-[620px]:grid-cols-1">
                         <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
                           Type
                           <select className="h-11 rounded-lg border-2 border-slate-200 bg-white px-3 text-slate-950" value={cardType} onChange={(event) => setCardType(event.target.value as PokemonType)}>
                             {POKEMON_TYPE_GROUPS.map((group) => (
-                              <option key={`${group.id}-wizard-card-type`} value={group.id}>{group.label}</option>
+                              <option key={`${group.id}-wizard-stats-type`} value={group.id}>{group.label}</option>
                             ))}
                           </select>
+                        </label>
+                        <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
+                          Illustrator
+                          <input className="h-11 rounded-lg border-2 border-slate-200 px-3 normal-case text-slate-950" value={illustratorName} onChange={(event) => setIllustratorName(event.target.value)} />
                         </label>
                       </div>
 
@@ -2711,7 +2883,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                         <div className="grid grid-cols-4 gap-2 max-[620px]:grid-cols-2">
                           {CARD_RARITY_OPTIONS.map((rarity) => (
                             <button
-                              key={rarity.id}
+                              key={`${rarity.id}-stats`}
                               className={`flex min-h-16 items-center gap-3 rounded-xl border-2 p-3 text-left transition ${
                                 cardRarity === rarity.id
                                   ? "border-slate-950 bg-slate-950 text-white"
@@ -2739,21 +2911,87 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                           ))}
                         </div>
                       </div>
+                    </div>
 
-                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 max-[620px]:grid-cols-1">
-                        <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
-                          Illustrator
-                          <input className="h-11 rounded-lg border-2 border-slate-200 px-3 normal-case text-slate-950" value={illustratorName} onChange={(event) => setIllustratorName(event.target.value)} />
-                        </label>
-                        <button className="flex h-11 items-center justify-center gap-2 self-end rounded-lg bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-40" disabled={isGeneratingCardCopy} type="button" onClick={() => void generateCardCopy()}>
-                          {isGeneratingCardCopy ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : <Sparkles aria-hidden="true" size={16} />}
-                          Regenerate attacks
-                        </button>
+                    <div
+                      className="mx-auto w-full max-w-[240px] rounded-[22px] p-2 shadow-xl shadow-slate-950/14"
+                      style={{ backgroundColor: cardBorderColor }}
+                    >
+                      <div className="relative grid aspect-[63/88] place-items-center overflow-hidden rounded-[18px] border-2 border-white/50 bg-slate-900 p-5 text-center text-white">
+                        {imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img alt="" className="max-h-[62%] max-w-[78%] object-contain opacity-95 drop-shadow-[0_16px_14px_rgba(0,0,0,0.35)]" src={cardImageUrl || imageUrl} />
+                        ) : (
+                          <ImageIcon aria-hidden="true" className="text-slate-500" size={44} />
+                        )}
+                        <div className="absolute inset-x-3 top-3 rounded-xl bg-white/92 p-2 text-slate-950">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm font-black">{selectedPokemon.name}</span>
+                            <span className="shrink-0 text-sm font-black">HP {cardHp}</span>
+                          </div>
+                        </div>
+                        <div className="absolute bottom-3 right-3 grid size-8 place-items-center rounded-full bg-white text-lg font-black text-slate-950">
+                          {selectedCardRarity.symbol}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {wizardStep === "card" ? (
+                  <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+                    <div
+                      className="mx-auto w-full max-w-[240px] rounded-[22px] p-2 shadow-xl shadow-slate-950/14"
+                      style={{ backgroundColor: cardBorderColor }}
+                    >
+                      <div className="grid aspect-[63/88] place-items-center overflow-hidden rounded-[18px] border-2 border-white/50 bg-slate-900">
+                        {cardImageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img alt="Card preview Pokemon" className="max-h-[74%] max-w-[82%] object-contain drop-shadow-[0_16px_14px_rgba(0,0,0,0.35)]" src={cardImageUrl} />
+                        ) : imageUrl ? (
+                          <button
+                            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-black text-slate-950"
+                            type="button"
+                            onClick={placeOnCard}
+                          >
+                            <Layers aria-hidden="true" size={18} />
+                            Place art
+                          </button>
+                        ) : (
+                          <ImageIcon aria-hidden="true" className="text-slate-500" size={44} />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid content-start gap-4">
+                      <div className="grid grid-cols-4 gap-2 rounded-[18px] border border-slate-200 bg-white p-4 max-[620px]:grid-cols-2">
+                        <div>
+                          <p className="text-[10px] font-black uppercase text-slate-400">HP</p>
+                          <p className="mt-1 truncate text-xl font-black text-slate-950">{cardHp}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase text-slate-400">Type</p>
+                          <p className="mt-1 truncate text-xl font-black text-slate-950">{cardTypeStyle.label}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase text-slate-400">Rarity</p>
+                          <p className="mt-1 truncate text-xl font-black text-slate-950">
+                            {selectedCardRarity.symbol} {selectedCardRarity.label}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase text-slate-400">Illustrator</p>
+                          <p className="mt-1 truncate text-xl font-black text-slate-950">{illustratorName || "Unknown"}</p>
+                        </div>
                       </div>
 
                       <div className="grid gap-2 rounded-[18px] border border-slate-200 bg-white p-4">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-xs font-black uppercase text-slate-500">AI card text</p>
+                          <button className="flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-black text-white disabled:opacity-40" disabled={isGeneratingCardCopy} type="button" onClick={() => void generateCardCopy()}>
+                            {isGeneratingCardCopy ? <Loader2 aria-hidden="true" className="animate-spin" size={14} /> : <Sparkles aria-hidden="true" size={14} />}
+                            Regenerate
+                          </button>
                           {isGeneratingCardCopy ? (
                             <Loader2 aria-hidden="true" className="animate-spin text-slate-400" size={16} />
                           ) : null}

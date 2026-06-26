@@ -3,7 +3,7 @@ import { listMintedCards, saveMintedCard } from "@/lib/minted-cards";
 export const runtime = "nodejs";
 
 const OPENROUTER_IMAGES_URL = "https://openrouter.ai/api/v1/images";
-const DEFAULT_MODEL = "google/gemini-2.5-flash-image";
+const DEFAULT_MINT_MODEL = "google/gemini-3-pro-image-preview";
 
 type CardAttack = { name?: unknown; damage?: unknown };
 type MintCardRequest = {
@@ -61,15 +61,21 @@ function promptForRealisticCard(body: MintCardRequest) {
     .filter(Boolean)
     .join("; ");
 
-  return `Use the provided image as the exact layout reference for a custom fan-made Pokemon-style trading card, then transform it into a realistic photographed premium collectible card.
+  const exactHpText = `${cardHp} HP`;
 
-Preserve the user's composition and readable card information: Pokemon name ${pokemonName}${body.isExCard ? " ex" : ""}, ${cardStage}, ${cardHp} HP, ${cardType} type, evolves from ${evolvesFrom}, attacks ${attackText || "as shown"}, weakness ${textValue(body.weakness, "as shown")}, resistance ${textValue(body.resistance, "as shown")}, retreat ${textValue(body.retreatCost, "as shown")}, card number ${textValue(body.cardNumber, "as shown")}, rarity ${cardRarity} with symbol ${cardRaritySymbol}, illustrator line "Illus. ${illustratorName}".
+  return `Use the provided image as the exact source of truth for a custom fan-made Pokemon-style trading card, then transform it into a realistic photographed premium collectible card.
 
-Art direction: make the card look like a real physical premium monster-battle trading card photographed in a studio. Add believable glossy laminated cardstock, subtle rounded corners, tiny edge thickness, foil rainbow holographic reflections, fine print texture, sharp ink, a slightly embossed border, and realistic shadows. Keep the card front centered and fully visible in portrait orientation. Upgrade the flat colored Pokemon into polished semi-realistic fantasy card artwork while respecting the user's colors, pose, silhouette, background, and custom stats. Improve lighting and material realism without changing the selected Pokemon identity or replacing the user's card design.
+Preserve all real card text exactly as supplied, with no invented or hallucinated text: Pokemon name ${pokemonName}${body.isExCard ? " ex" : ""}, ${cardStage}, exact HP text "${exactHpText}", ${cardType} type, evolves from ${evolvesFrom}, attacks ${attackText || "as shown"}, weakness ${textValue(body.weakness, "as shown")}, resistance ${textValue(body.resistance, "as shown")}, retreat ${textValue(body.retreatCost, "as shown")}, card number ${textValue(body.cardNumber, "as shown")}, rarity ${cardRarity} with symbol ${cardRaritySymbol}, illustrator line "Illus. ${illustratorName}".
+
+Critical HP requirement: the final rendered card MUST show exactly "${exactHpText}" in the HP area. Copy those digits character-for-character. Do not round, cap, abbreviate, omit, restyle into a different number, or substitute any other HP value. If the HP is visually awkward because it is long, preserve the exact text anyway and fit it into the HP area.
+
+Art direction: make the card look like a real physical premium monster-battle trading card photographed in a studio. Add believable glossy laminated cardstock, subtle rounded corners, tiny edge thickness, fine print texture, sharp ink, a slightly embossed border, and realistic shadows. Keep the card front centered and fully visible in portrait orientation.
+
+Color constraints: preserve the color scheme from the user's colored-in line art and flat card preview. The Pokemon body colors, accent colors, fill colors, border color, type color, and background palette must remain recognizably the same as the provided image. You may add realistic lighting, gloss, foil shimmer, and shadows, but do not recolor the Pokemon, swap the palette, or introduce unrelated dominant colors.
 
 The illustrator credit must be clearly readable on the lower portion of the card as "Illus. ${illustratorName}", not hidden in microtext. The rarity symbol ${cardRaritySymbol} must appear near the collector number.
 
-Important constraints: no extra hands, no tabletop clutter, no logos or watermarks, no unrelated characters, no extra cards, no misspelled decorative gibberish beyond the supplied card text. The result should be a high-resolution realistic final card render, not a blank template.`;
+Text constraints: do not add any extra labels, fake rules, fake copyright lines, random numbers, decorative glyph words, logos, or watermark text. If any text is unclear, keep the supplied card text above rather than inventing replacements. The exact HP text "${exactHpText}" is the highest-priority text requirement. The result should be a high-resolution realistic final card render, not a blank template.`;
 }
 
 async function readOpenRouterJson(response: Response) {
@@ -104,7 +110,7 @@ export async function POST(request: Request) {
       return jsonError("Provide the final card image to mint.", 400);
     }
 
-    const model = textValue(body.model, process.env.OPENROUTER_IMAGE_MODEL || DEFAULT_MODEL);
+    const model = textValue(body.model, process.env.OPENROUTER_MINT_IMAGE_MODEL || DEFAULT_MINT_MODEL);
     const payload: OpenRouterImageRequest = {
       model,
       prompt: promptForRealisticCard(body),
