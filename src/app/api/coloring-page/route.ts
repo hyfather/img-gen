@@ -1,5 +1,6 @@
 import {
   getGeneratedImageStorageError,
+  listAllGeneratedImages,
   listGeneratedImages,
   saveGeneratedImage,
 } from "@/lib/generated-images";
@@ -159,6 +160,12 @@ function validatePokemon(pokemonName: string) {
 
 export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
+
+    if (url.searchParams.get("all")) {
+      return Response.json({ images: await listAllGeneratedImages() });
+    }
+
     const { pokemonName, pose } = parsePokemonPose(request);
 
     if (!validatePokemon(pokemonName)) {

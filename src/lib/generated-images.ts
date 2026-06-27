@@ -213,6 +213,100 @@ async function saveGeneratedImageLocally({
   };
 }
 
+async function listAllLocalGeneratedImages(): Promise<GeneratedImage[]> {
+  const root = join(process.cwd(), "public", GENERATED_DIR);
+  const images: GeneratedImage[] = [];
+  const isImage = (name: string) => /\.(jpe?g|png|webp)$/i.test(name);
+
+  const collectFile = async (pathname: string, absolutePath: string) => {
+    const stats = await stat(absolutePath);
+
+    images.push({
+      downloadUrl: publicPath(pathname),
+      pathname,
+      renderUrl: publicPath(pathname),
+      source: "local",
+      uploadedAt: stats.mtime.toISOString(),
+      url: publicPath(pathname),
+    });
+  };
+
+  try {
+    const slugEntries = await readdir(root, { withFileTypes: true });
+
+    for (const slugEntry of slugEntries) {
+      if (slugEntry.isFile() && isImage(slugEntry.name)) {
+        // Legacy flat files: generated-coloring-pages/<slug>-<pose>-<ts>.ext
+        await collectFile(
+          `${GENERATED_DIR}/${slugEntry.name}`,
+          join(root, slugEntry.name),
+        );
+        continue;
+      }
+
+      if (!slugEntry.isDirectory()) {
+        continue;
+      }
+
+      const poseRoot = join(root, slugEntry.name);
+      const poseEntries = await readdir(poseRoot, { withFileTypes: true });
+
+      for (const poseEntry of poseEntries) {
+        if (!poseEntry.isDirectory()) {
+          continue;
+        }
+
+        const poseDir = join(poseRoot, poseEntry.name);
+        const fileEntries = await readdir(poseDir, { withFileTypes: true });
+
+        for (const fileEntry of fileEntries) {
+          if (fileEntry.isFile() && isImage(fileEntry.name)) {
+            await collectFile(
+              `${GENERATED_DIR}/${slugEntry.name}/${poseEntry.name}/${fileEntry.name}`,
+              join(poseDir, fileEntry.name),
+            );
+          }
+        }
+      }
+    }
+  } catch {
+    return [];
+  }
+
+  return sortNewestFirst(images);
+}
+
+export async function listAllGeneratedImages(
+  limit = 60,
+): Promise<GeneratedImage[]> {
+  if (!shouldUseBlobStore()) {
+    return (await listAllLocalGeneratedImages()).slice(0, limit);
+  }
+
+  if (getGeneratedImageStorageError()) {
+    return [];
+  }
+
+  const result = await list({
+    ...getBlobAuthOptions(),
+    limit,
+    prefix: `${GENERATED_DIR}/`,
+  });
+
+  return sortNewestFirst(
+    result.blobs
+      .filter((blob) => /\.(jpe?g|png|webp)$/i.test(blob.pathname))
+      .map((blob) => ({
+        downloadUrl: blob.downloadUrl,
+        pathname: blob.pathname,
+        renderUrl: renderPath(blob.url),
+        source: "blob" as const,
+        uploadedAt: blob.uploadedAt.toISOString(),
+        url: blob.url,
+      })),
+  ).slice(0, limit);
+}
+
 export async function listGeneratedImages(
   pokemonName: string,
   pose: string,
