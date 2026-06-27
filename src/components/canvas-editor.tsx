@@ -2022,7 +2022,10 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
             </aside>
 
             <div className="flex min-h-0 flex-col bg-[#f8fafc]">
-              <header className="shrink-0 border-b border-slate-200 bg-white px-6 py-5 max-[720px]:px-4 max-[720px]:py-4">
+              <header
+                className="shrink-0 border-b border-slate-200 bg-white px-6 py-5 max-[720px]:px-4 max-[720px]:py-4"
+                style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top))" }}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
@@ -2067,10 +2070,10 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                 </div>
               </header>
 
-              <div className="min-h-0 flex-1 overflow-y-auto p-6 max-[720px]:p-4">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-6 max-[720px]:p-4">
                 {wizardStep === "pokemon" ? (
                   <div className="grid gap-5">
-                    <div className="flex gap-2 overflow-x-auto pb-1">
+                    <div className="no-scrollbar flex gap-2 overflow-x-auto overscroll-x-contain pb-1">
                       {POKEMON_TYPE_GROUPS.map((group) => (
                         <button
                           key={`${group.id}-wizard-type`}
@@ -2282,7 +2285,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                 {wizardStep === "color" ? (
                   <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
                     <div className="grid content-start gap-3">
-                      <div className="flex items-center gap-3 overflow-x-auto overscroll-x-contain rounded-[18px] border border-slate-200 bg-white p-3 shadow-sm">
+                      <div className="no-scrollbar flex items-center gap-3 overflow-x-auto overscroll-x-contain rounded-[18px] border border-slate-200 bg-white p-3 shadow-sm">
                         <button
                           aria-label="Generate new line art"
                           className="grid size-20 shrink-0 place-items-center rounded-2xl border-2 border-slate-950 bg-slate-950 text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 disabled:opacity-45"
@@ -2367,7 +2370,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                         <div className="flex items-center gap-2">
                           <button
                             aria-label="Undo"
-                            className="grid size-10 place-items-center rounded-xl border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
+                            className="grid size-11 place-items-center rounded-xl border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
                             disabled={!canUndo}
                             type="button"
                             onClick={undoFill}
@@ -2376,7 +2379,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                           </button>
                           <button
                             aria-label="Clear colors"
-                            className="grid size-10 place-items-center rounded-xl border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
+                            className="grid size-11 place-items-center rounded-xl border-2 border-slate-200 bg-white text-slate-950 disabled:opacity-40"
                             disabled={!imageUrl}
                             type="button"
                             onClick={clearColors}
@@ -2385,7 +2388,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                           </button>
                           <button
                             aria-label="Download PNG"
-                            className="grid size-10 place-items-center rounded-xl bg-slate-950 text-white disabled:opacity-40"
+                            className="grid size-11 place-items-center rounded-xl bg-slate-950 text-white disabled:opacity-40"
                             disabled={!imageUrl}
                             type="button"
                             onClick={downloadColoringPage}
@@ -2747,7 +2750,10 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
               </div>
 
-              <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-6 py-4 max-[720px]:px-4">
+              <footer
+                className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-6 py-4 max-[720px]:px-4"
+                style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+              >
                 <button
                   className="flex h-11 items-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-4 text-sm font-black text-slate-950 transition hover:border-slate-300 disabled:opacity-40"
                   disabled={isFirstWizardStep}
