@@ -41,3 +41,35 @@ button {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Long-pressing a button or the coloring canvas on iOS pops the text-selection
+   magnifier / callout menu, which fights taps and flood-fills. Suppress it. */
+button,
+canvas,
+[role="dialog"] h2,
+[role="dialog"] h3 {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* iOS Safari zooms the whole page when a focused form control has a font size
+   below 16px. Force 16px on touch devices so tapping an input never zooms. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Horizontal rails (type chips, saved-art ribbon) should scroll with momentum
+   and without a visible scrollbar eating vertical space on mobile. */
+.no-scrollbar {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

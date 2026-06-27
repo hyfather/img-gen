@@ -17,7 +17,10 @@ export default async function CardsGalleryPage() {
   const galleryCards = heroCard ? cards.slice(1) : cards;
 
   return (
-    <main className="min-h-dvh bg-[radial-gradient(circle_at_top_left,#ecfccb,transparent_34%),linear-gradient(135deg,#f8fafc,#e0f2fe_48%,#fefce8)] px-4 py-6 text-slate-950 sm:px-6 lg:px-10">
+    <main
+      className="min-h-dvh bg-[radial-gradient(circle_at_top_left,#ecfccb,transparent_34%),linear-gradient(135deg,#f8fafc,#e0f2fe_48%,#fefce8)] px-4 py-6 text-slate-950 sm:px-6 lg:px-10"
+      style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
+    >
       <div className="mx-auto grid max-w-7xl gap-8">
         <header className="flex flex-wrap items-center justify-between gap-4 rounded-[2rem] border border-white/70 bg-white/75 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur md:p-6">
           <div className="max-w-2xl">
