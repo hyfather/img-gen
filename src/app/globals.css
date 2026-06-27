@@ -63,6 +63,15 @@ canvas,
   }
 }
 
+/* Form controls default to min-width:auto (~their `size`), so they refuse to
+   shrink inside grid/flex cells and burst the layout into a sideways scroll on
+   narrow screens. Let them shrink to their track instead. */
+input,
+select,
+textarea {
+  min-width: 0;
+}
+
 /* Horizontal rails (type chips, saved-art ribbon) should scroll with momentum
    and without a visible scrollbar eating vertical space on mobile. */
 .no-scrollbar {
