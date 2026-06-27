@@ -12,6 +12,7 @@ import {
   Loader2,
   PaintBucket,
   Plus,
+  Printer,
   Sparkles,
   Undo2,
 } from "lucide-react";
@@ -27,6 +28,12 @@ import {
   type PokemonOption,
   type PokemonType,
 } from "@/lib/pokemon";
+import {
+  CARD_PRINT_HEIGHT_IN,
+  CARD_PRINT_WIDTH_IN,
+  CARD_RENDER_HEIGHT,
+  CARD_RENDER_WIDTH,
+} from "@/lib/card";
 import type { CanvasBackground } from "@/lib/backgrounds";
 
 type GenerateResponse = {
@@ -1405,7 +1412,9 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     }
 
     const cardWidth = 900;
-    const cardHeight = Math.round((cardWidth * 88) / 63);
+    const cardHeight = Math.round(
+      (cardWidth * CARD_RENDER_HEIGHT) / CARD_RENDER_WIDTH,
+    );
     const canvas = document.createElement("canvas");
     canvas.width = cardWidth;
     canvas.height = cardHeight;
@@ -1531,6 +1540,35 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     } finally {
       setIsMintingCard(false);
     }
+  }
+
+  function printMintedCard() {
+    if (!mintedCardUrl) {
+      return;
+    }
+
+    const printWindow = window.open("", "_blank", "width=420,height=600");
+
+    if (!printWindow) {
+      setStatus("Allow pop-ups to print the card.");
+      return;
+    }
+
+    const title = `${selectedPokemon.name}${isExCard ? " ex" : ""} card`;
+    // The minted image is a full-bleed card front; print it at the real
+    // trading-card size (2.5in x 3.5in) with no page margins.
+    printWindow.document.write(
+      `<!doctype html><html><head><meta charset="utf-8" /><title>${title}</title>` +
+        `<style>` +
+        `@page { size: ${CARD_PRINT_WIDTH_IN}in ${CARD_PRINT_HEIGHT_IN}in; margin: 0; }` +
+        `html, body { margin: 0; padding: 0; background: #ffffff; }` +
+        `img { width: ${CARD_PRINT_WIDTH_IN}in; height: ${CARD_PRINT_HEIGHT_IN}in; object-fit: contain; display: block; margin: 0 auto; }` +
+        `@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }` +
+        `</style></head><body>` +
+        `<img src="${mintedCardUrl}" alt="${title}" onload="window.focus();window.print();" />` +
+        `</body></html>`,
+    );
+    printWindow.document.close();
   }
 
   async function generateBackground() {
@@ -2684,10 +2722,20 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                         </p>
                       ) : null}
                       {mintedCardUrl ? (
-                        <a className="flex h-11 items-center justify-center rounded-[14px] bg-slate-950 px-4 text-sm font-black text-white" href={mintedCardUrl} download>
-                          <Download aria-hidden="true" className="mr-2" size={16} />
-                          Download
-                        </a>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            className="flex h-11 items-center justify-center rounded-[14px] bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800"
+                            type="button"
+                            onClick={printMintedCard}
+                          >
+                            <Printer aria-hidden="true" className="mr-2" size={16} />
+                            Print
+                          </button>
+                          <a className="flex h-11 items-center justify-center rounded-[14px] border-2 border-slate-200 bg-white px-4 text-sm font-black text-slate-950 transition hover:border-slate-300" href={mintedCardUrl} download>
+                            <Download aria-hidden="true" className="mr-2" size={16} />
+                            Download
+                          </a>
+                        </div>
                       ) : null}
                       <a className="flex h-11 items-center justify-center rounded-[14px] border-2 border-slate-200 bg-white px-4 text-sm font-black text-slate-950 transition hover:border-slate-300" href="/cards">
                         <Images aria-hidden="true" className="mr-2" size={16} />

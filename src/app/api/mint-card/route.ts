@@ -1,3 +1,4 @@
+import { CARD_RENDER_SIZE } from "@/lib/card";
 import { listMintedCards, saveMintedCard } from "@/lib/minted-cards";
 
 export const runtime = "nodejs";
@@ -63,19 +64,21 @@ function promptForRealisticCard(body: MintCardRequest) {
 
   const exactHpText = `${cardHp} HP`;
 
-  return `Use the provided image as the exact source of truth for a custom fan-made Pokemon-style trading card, then transform it into a realistic photographed premium collectible card.
+  return `Use the provided image as the exact source of truth for a custom fan-made Pokemon-style trading card, then transform it into a realistic premium collectible card.
 
 Preserve all real card text exactly as supplied, with no invented or hallucinated text: Pokemon name ${pokemonName}${body.isExCard ? " ex" : ""}, ${cardStage}, exact HP text "${exactHpText}", ${cardType} type, evolves from ${evolvesFrom}, attacks ${attackText || "as shown"}, weakness ${textValue(body.weakness, "as shown")}, resistance ${textValue(body.resistance, "as shown")}, retreat ${textValue(body.retreatCost, "as shown")}, card number ${textValue(body.cardNumber, "as shown")}, rarity ${cardRarity} with symbol ${cardRaritySymbol}, illustrator line "Illus. ${illustratorName}".
 
 Critical HP requirement: the final rendered card MUST show exactly "${exactHpText}" in the HP area. Copy those digits character-for-character. Do not round, cap, abbreviate, omit, restyle into a different number, or substitute any other HP value. If the HP is visually awkward because it is long, preserve the exact text anyway and fit it into the HP area.
 
-Art direction: make the card look like a real physical premium monster-battle trading card photographed in a studio. Add believable glossy laminated cardstock, subtle rounded corners, tiny edge thickness, fine print texture, sharp ink, a slightly embossed border, and realistic shadows. Keep the card front centered and fully visible in portrait orientation.
+Framing requirement (most important for layout): output ONLY the card front, and make the card fill the entire image edge to edge. The rendered card must occupy 100% of the frame with no surrounding scene whatsoever — no table, desk, hand, holder, sleeve, mat, easel, or background surface; no drop shadow, no photo border, no rounded photo frame, and no empty margins around the card. Render it as a flat, perfectly head-on scan of the card front in portrait orientation. The card's own printed edge IS the outer edge of the image, with no visible card thickness or 3D perspective. Do not depict the card sitting on or photographed against anything.
 
-Color constraints: preserve the color scheme from the user's colored-in line art and flat card preview. The Pokemon body colors, accent colors, fill colors, border color, type color, and background palette must remain recognizably the same as the provided image. You may add realistic lighting, gloss, foil shimmer, and shadows, but do not recolor the Pokemon, swap the palette, or introduce unrelated dominant colors.
+Art direction: keep a premium printed finish applied to the card surface itself — glossy laminated stock, fine print texture, crisp ink, and a subtle foil/holo sheen on the frame and rarity. Do not add environmental lighting, studio reflections, or scene shadows around the card.
+
+Color constraints: preserve the color scheme from the user's colored-in line art and flat card preview. The Pokemon body colors, accent colors, fill colors, border color, type color, and background palette must remain recognizably the same as the provided image. You may add gloss and foil shimmer on the card surface, but do not recolor the Pokemon, swap the palette, or introduce unrelated dominant colors.
 
 The illustrator credit must be clearly readable on the lower portion of the card as "Illus. ${illustratorName}", not hidden in microtext. The rarity symbol ${cardRaritySymbol} must appear near the collector number.
 
-Text constraints: do not add any extra labels, fake rules, fake copyright lines, random numbers, decorative glyph words, logos, or watermark text. If any text is unclear, keep the supplied card text above rather than inventing replacements. The exact HP text "${exactHpText}" is the highest-priority text requirement. The result should be a high-resolution realistic final card render, not a blank template.`;
+Text constraints: do not add any extra labels, fake rules, fake copyright lines, random numbers, decorative glyph words, logos, or watermark text. If any text is unclear, keep the supplied card text above rather than inventing replacements. The exact HP text "${exactHpText}" is the highest-priority text requirement. The result should be a high-resolution realistic card front that fills the frame, not a blank template and not a photo of a card in a scene.`;
 }
 
 async function readOpenRouterJson(response: Response) {
@@ -118,7 +121,7 @@ export async function POST(request: Request) {
       images: [finalCardImage],
       modalities: ["image", "text"],
       output_format: "png",
-      size: "1024x1536",
+      size: CARD_RENDER_SIZE,
       n: 1,
     };
     const headers = {
