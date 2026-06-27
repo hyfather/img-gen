@@ -945,10 +945,6 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
               ? `Saved ${selectedPokemon.name} art is unavailable`
               : `No saved ${selectedPokemon.name} ${selectedPoseLabel.toLowerCase()} art found`,
           );
-
-          if (wizardStep === "color" && !controller.signal.aborted) {
-            await generateColoringPagePng(selectedPokemon.name);
-          }
         }
       } catch (error) {
         if (controller.signal.aborted) {
@@ -966,10 +962,43 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     void loadExistingImages();
 
     return () => controller.abort();
-    // generateColoringPagePng intentionally stays out of this dependency list;
-    // this effect is keyed to the selected Pokemon/pose lookup.
+    // Keyed only to the Pokemon/pose lookup — NOT wizardStep, so navigating
+    // between steps never re-runs this and wipes the placed card art.
+  }, [loadImageToCanvases, selectedPokemon.name, selectedPose, selectedPoseLabel]);
+
+  // Auto-generate fresh line art the first time the user lands on the Color
+  // step for a Pokemon/pose that has no saved art. Guarded so it fires at most
+  // once per combination and never retries in a loop on failure.
+  const autoGenForRef = useRef("");
+  useEffect(() => {
+    if (
+      wizardStep !== "color" ||
+      imageUrl ||
+      isLoadingImages ||
+      isGenerating ||
+      existingImages.length > 0
+    ) {
+      return;
+    }
+
+    const key = `${selectedPokemon.name}/${selectedPose}`;
+
+    if (autoGenForRef.current === key) {
+      return;
+    }
+
+    autoGenForRef.current = key;
+    void generateColoringPagePng(selectedPokemon.name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadImageToCanvases, selectedPokemon.name, selectedPose, selectedPoseLabel, wizardStep]);
+  }, [
+    wizardStep,
+    imageUrl,
+    isLoadingImages,
+    isGenerating,
+    existingImages.length,
+    selectedPokemon.name,
+    selectedPose,
+  ]);
 
   async function generateColoringPagePng(pokemonName: string) {
     const poseLabel = selectedPoseLabel;
@@ -1212,12 +1241,24 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   }
 
   function goToWizardStep(nextStep: WizardStepId) {
-    if (nextStep === "details" && imageUrl) {
-      placeOnCard();
+    if (nextStep === "details" || nextStep === "mint") {
+      // Capture the colored art onto the card. Re-place when we're leaving the
+      // Color step (its canvases are still mounted and may have new coloring),
+      // or when nothing has been placed yet. Skip otherwise so we never
+      // overwrite already-colored art with the plain line-art fallback.
+      const leavingColorStep = wizardStep === "color";
+
+      if (imageUrl && (leavingColorStep || !cardImageUrl)) {
+        placeOnCard();
+      }
 
       // Auto-write attacks the first time we stage a given Pokemon, but never
       // clobber edits the user already made on a later visit.
-      if (generatedCopyForRef.current !== selectedPokemon.name) {
+      if (
+        nextStep === "details" &&
+        imageUrl &&
+        generatedCopyForRef.current !== selectedPokemon.name
+      ) {
         generatedCopyForRef.current = selectedPokemon.name;
         void generateCardCopy();
       }
