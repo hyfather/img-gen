@@ -341,10 +341,47 @@ function loadImage(src: string) {
   }
 
   return new Promise<HTMLImageElement>((resolve, reject) => {
-    image.onload = () => resolve(image);
+    image.onload = () => {
+      // Corrupt files can fire onload but decode to 0x0; treat them as failures
+      // so callers fall back to the next valid image.
+      if (image.naturalWidth === 0 || image.naturalHeight === 0) {
+        reject(new Error(`Empty image ${src}.`));
+        return;
+      }
+
+      resolve(image);
+    };
     image.onerror = () => reject(new Error(`Could not load ${src}.`));
     image.src = src;
   });
+}
+
+// Some saved files are corrupt (they "load" but decode to 0x0). Treat those
+// as broken so we never surface a busted thumbnail.
+function loadRenderableImage(src: string) {
+  return new Promise<boolean>((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image.naturalWidth > 0 && image.naturalHeight > 0);
+    image.onerror = () => resolve(false);
+    image.src = src;
+  });
+}
+
+async function pickFirstRenderableImage(
+  images: GeneratedImage[],
+  signal?: AbortSignal,
+) {
+  for (const image of images) {
+    if (signal?.aborted) {
+      return null;
+    }
+
+    if (await loadRenderableImage(image.renderUrl)) {
+      return image;
+    }
+  }
+
+  return null;
 }
 
 function hexToRgba(fillColor: string) {
@@ -629,6 +666,10 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
   const lineCanvasRef = useRef<HTMLCanvasElement>(null);
   const boundaryMaskRef = useRef<Uint8Array | null>(null);
+  // Canvas pixels are lost when the Color step unmounts during navigation, so we
+  // persist the colored layer (and a flattened composite) keyed to the line art.
+  const colorLayerRef = useRef<{ url: string; layer: string } | null>(null);
+  const composedColoredRef = useRef<{ url: string; composite: string } | null>(null);
   const loadedCanvasImageUrlRef = useRef("");
   const undoStackRef = useRef<ImageData[]>([]);
   const generatedCopyForRef = useRef("");
@@ -720,6 +761,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
     undoStackRef.current = [];
     boundaryMaskRef.current = null;
+    colorLayerRef.current = null;
+    composedColoredRef.current = null;
     loadedCanvasImageUrlRef.current = "";
     setCanUndo(false);
     setImageUrl("");
@@ -797,17 +840,29 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
       OUTLINE_DILATION_RADIUS,
     );
     lineContext.putImageData(outlineImage, 0, 0);
+
+    // Restore any coloring previously saved for this line art so it survives the
+    // Color step being unmounted during wizard navigation.
+    const savedLayer = colorLayerRef.current;
+
+    if (savedLayer && savedLayer.url === nextImageUrl) {
+      try {
+        const layerImage = await loadImage(savedLayer.layer);
+        colorContext.drawImage(layerImage, 0, 0);
+      } catch {
+        // Ignore — fall back to a blank color layer.
+      }
+    }
+
     undoStackRef.current = [];
     loadedCanvasImageUrlRef.current = nextImageUrl;
     setCanUndo(false);
   }, []);
 
   useEffect(() => {
-    if (
-      wizardStep === "color" &&
-      imageUrl &&
-      loadedCanvasImageUrlRef.current !== imageUrl
-    ) {
+    // Redraw whenever we land on the Color step. The canvas is destroyed when
+    // the step unmounts, so this also restores saved coloring on re-entry.
+    if (wizardStep === "color" && imageUrl) {
       void loadImageToCanvases(imageUrl);
     }
   }, [imageUrl, loadImageToCanvases, wizardStep]);
@@ -834,7 +889,12 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
               throw new Error(result.error || "Could not load saved images.");
             }
 
-            return [pose.id, result.images?.[0] ?? null] as const;
+            const renderable = await pickFirstRenderableImage(
+              result.images ?? [],
+              controller.signal,
+            );
+
+            return [pose.id, renderable] as const;
           } catch {
             return [pose.id, null] as const;
           }
@@ -867,7 +927,17 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
           return;
         }
 
-        setPastCreations(result.images ?? []);
+        // Drop corrupt files so the gallery only shows art that renders.
+        const images = result.images ?? [];
+        const renderable = await Promise.all(
+          images.map((image) => loadRenderableImage(image.renderUrl)),
+        );
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setPastCreations(images.filter((_, index) => renderable[index]));
       } catch {
         // Ignore — the past-creations gallery is a convenience, not critical.
       }
@@ -906,7 +976,18 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
           return;
         }
 
-        const images = result.images ?? [];
+        // Drop corrupt files so the canvas, filmstrip, and preview only ever
+        // use art that actually renders.
+        const allImages = result.images ?? [];
+        const renderableFlags = await Promise.all(
+          allImages.map((image) => loadRenderableImage(image.renderUrl)),
+        );
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const images = allImages.filter((_, index) => renderableFlags[index]);
         setExistingImages(images);
 
         let selectedSavedImage: GeneratedImage | null = null;
@@ -1168,6 +1249,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = getCanvasPoint(event);
     floodFill(point.x, point.y, selectedPaint);
+    syncColoring();
   }
 
   function undoFill() {
@@ -1181,6 +1263,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
     colorContext.putImageData(snapshot, 0, 0);
     setCanUndo(undoStackRef.current.length > 0);
+    syncColoring();
   }
 
   function clearColors() {
@@ -1195,6 +1278,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     undoStackRef.current.push(current);
     setCanUndo(true);
     colorContext.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    syncColoring();
   }
 
   function composeColoredPokemon(includeWhiteBackground = false) {
@@ -1225,9 +1309,27 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     return exportCanvas.toDataURL("image/png");
   }
 
+  // Snapshot the coloring after every change so it survives the Color step
+  // unmounting and is available to placeOnCard regardless of canvas state.
+  function syncColoring() {
+    const colorCanvas = colorCanvasRef.current;
+
+    if (!colorCanvas || !imageUrl) {
+      return;
+    }
+
+    colorLayerRef.current = { url: imageUrl, layer: colorCanvas.toDataURL("image/png") };
+    composedColoredRef.current = { url: imageUrl, composite: composeColoredPokemon() };
+  }
+
   function placeOnCard() {
-    const composedImage = composeColoredPokemon();
-    const nextCardImage = composedImage || imageUrl;
+    // Prefer the saved composite (captured while coloring); the live canvas may
+    // be blank if the Color step was unmounted during navigation.
+    const savedComposite =
+      composedColoredRef.current?.url === imageUrl
+        ? composedColoredRef.current.composite
+        : "";
+    const nextCardImage = savedComposite || composeColoredPokemon() || imageUrl;
 
     if (!nextCardImage) {
       setStatus("Choose or generate line art before placing it on a card.");
