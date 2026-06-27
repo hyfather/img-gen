@@ -2092,7 +2092,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                       ))}
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3 max-[980px]:grid-cols-2 max-[560px]:grid-cols-1">
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                       {activeTypeGroup.pokemon.map((pokemon) => {
                         const typeStyle = TYPE_ICON_STYLES[pokemon.type];
                         const isSelected =
@@ -2102,7 +2102,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                         return (
                           <button
                             key={`${pokemon.type}-${pokemon.name}-wizard`}
-                            className={`group relative min-h-44 overflow-hidden rounded-[18px] border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-xl ${
+                            className={`group relative flex min-h-[108px] flex-col justify-between overflow-hidden rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-xl ${
                               isSelected
                                 ? "border-slate-950 bg-slate-950 text-white shadow-xl shadow-slate-950/18"
                                 : "border-slate-200 bg-white text-slate-950 hover:border-slate-300"
@@ -2110,24 +2110,28 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                             type="button"
                             onClick={() => selectPokemon(pokemon)}
                           >
-                            <span
-                              className="absolute right-4 top-4 grid size-12 place-items-center rounded-full border-2 border-white text-xl font-black shadow-sm"
-                              style={{
-                                backgroundColor: typeStyle.color,
-                                color: typeStyle.textColor ?? "#ffffff",
-                              }}
-                            >
-                              {typeStyle.glyph}
-                            </span>
-                            <span className="mt-16 block text-2xl font-black">{pokemon.name}</span>
-                            <span className={`mt-2 block text-xs font-black uppercase ${isSelected ? "text-white/55" : "text-slate-400"}`}>
-                              {typeStyle.label}
-                            </span>
-                            {isSelected ? (
-                              <span className="absolute bottom-4 right-4 grid size-8 place-items-center rounded-full bg-white text-slate-950">
-                                <Check aria-hidden="true" size={16} />
+                            <span className="flex items-start justify-between gap-2">
+                              <span
+                                className="grid size-10 place-items-center rounded-full border-2 border-white text-lg font-black shadow-sm"
+                                style={{
+                                  backgroundColor: typeStyle.color,
+                                  color: typeStyle.textColor ?? "#ffffff",
+                                }}
+                              >
+                                {typeStyle.glyph}
                               </span>
-                            ) : null}
+                              {isSelected ? (
+                                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white text-slate-950">
+                                  <Check aria-hidden="true" size={14} />
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="mt-3 block min-w-0">
+                              <span className="block truncate text-lg font-black leading-tight">{pokemon.name}</span>
+                              <span className={`block text-[10px] font-black uppercase ${isSelected ? "text-white/55" : "text-slate-400"}`}>
+                                {typeStyle.label}
+                              </span>
+                            </span>
                           </button>
                         );
                       })}
@@ -2137,8 +2141,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
 
                 {wizardStep === "pose" ? (
                   <div className="grid gap-6">
-                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
-                    <div className="grid grid-cols-4 gap-3 max-[980px]:grid-cols-2 max-[520px]:grid-cols-1">
+                  <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+                    <div className="grid grid-cols-2 gap-3 min-[680px]:grid-cols-3 lg:grid-cols-4">
                       {POSE_OPTIONS.map((pose, index) => {
                         const posePreview = poseImagePreviews[pose.id];
                         const isSelectedPose = selectedPose === pose.id;
@@ -2146,7 +2150,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                         return (
                           <button
                             key={`${pose.id}-wizard`}
-                            className={`group min-h-44 rounded-[18px] border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-xl ${
+                            className={`group rounded-2xl border p-2.5 text-left transition hover:-translate-y-0.5 hover:shadow-xl ${
                               isSelectedPose
                                 ? "border-slate-950 bg-slate-950 text-white shadow-xl shadow-slate-950/16"
                                 : "border-slate-200 bg-white text-slate-950 hover:border-slate-300"
@@ -2182,8 +2186,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                                 </span>
                               )}
                             </span>
-                            <span className="mt-3 flex items-center justify-between gap-2">
-                              <span className="min-w-0 truncate text-xl font-black">{pose.label}</span>
+                            <span className="mt-2 flex items-center justify-between gap-2">
+                              <span className="min-w-0 truncate text-base font-black">{pose.label}</span>
                               {posePreview ? (
                                 <span
                                   className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase ${
@@ -2200,7 +2204,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                         );
                       })}
                     </div>
-                    <div className="grid content-start gap-3 rounded-[18px] border border-slate-200 bg-white p-4">
+                    <div className="grid min-w-0 grid-cols-1 content-start gap-3 rounded-[18px] border border-slate-200 bg-white p-4">
                       <label className="grid gap-2 text-xs font-black uppercase text-slate-500">
                         Model
                         <select
@@ -2283,8 +2287,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                 ) : null}
 
                 {wizardStep === "color" ? (
-                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
-                    <div className="grid content-start gap-3">
+                  <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
+                    <div className="grid min-w-0 grid-cols-1 content-start gap-3">
                       <div className="no-scrollbar flex items-center gap-3 overflow-x-auto overscroll-x-contain rounded-[18px] border border-slate-200 bg-white p-3 shadow-sm">
                         <button
                           aria-label="Generate new line art"
@@ -2399,7 +2403,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                       </div>
                     </div>
 
-                    <div className="grid content-start gap-4 rounded-[22px] border border-slate-200 bg-white p-4">
+                    <div className="grid min-w-0 grid-cols-1 content-start gap-4 rounded-[22px] border border-slate-200 bg-white p-4">
                       <div className="flex items-center gap-3">
                         <span
                           className="grid size-16 shrink-0 place-items-center rounded-2xl border border-slate-200 shadow-inner"
@@ -2465,8 +2469,8 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                 ) : null}
 
                 {wizardStep === "details" ? (
-                  <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-                    <div className="grid content-start gap-3 lg:sticky lg:top-0">
+                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+                    <div className="grid min-w-0 grid-cols-1 content-start gap-3 lg:sticky lg:top-0">
                       {cardPreviewNode}
                       {!cardImageUrl && imageUrl ? (
                         <button
@@ -2480,7 +2484,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                       ) : null}
                     </div>
 
-                    <div className="grid content-start gap-4">
+                    <div className="grid min-w-0 grid-cols-1 content-start gap-4">
                       <div className="flex items-center justify-between gap-3 rounded-[18px] border border-slate-200 bg-white p-4">
                         <div className="min-w-0">
                           <p className="text-sm font-black text-slate-950">Card text</p>
@@ -2659,7 +2663,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                 ) : null}
 
                 {wizardStep === "mint" ? (
-                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+                  <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
                     <div className="flex min-h-80 flex-col items-center justify-center gap-3 rounded-[22px] border border-slate-200 bg-white p-4">
                       {mintedCardUrl ? (
                         <>
@@ -2699,7 +2703,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                         </div>
                       )}
                     </div>
-                    <div className="grid content-start gap-3">
+                    <div className="grid min-w-0 grid-cols-1 content-start gap-3">
                       <div className="rounded-[18px] border border-slate-200 bg-white p-4">
                         <p className="text-xs font-black uppercase text-slate-400">Ready to mint</p>
                         <p className="mt-1 text-lg font-black text-slate-950">
