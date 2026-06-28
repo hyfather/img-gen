@@ -344,10 +344,9 @@ const CARD_RARITY_OPTIONS: CardRarityOption[] = [
 ];
 const DEFAULT_CARD_RARITY = CARD_RARITY_OPTIONS[0];
 
-// HP is chosen with a slider, so keep it inside a realistic trading-card range
-// and snapped to the tens that real cards use.
+// HP is chosen with a slider, so keep it within the supported card range.
 const CARD_HP_MIN = 30;
-const CARD_HP_MAX = 400;
+const CARD_HP_MAX = 999999;
 const CARD_HP_STEP = 10;
 
 function clampCardHp(value: number) {
