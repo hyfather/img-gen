@@ -15,9 +15,7 @@ import {
   PaintBucket,
   Plus,
   Printer,
-  RefreshCw,
   Sparkles,
-  Swords,
   Undo2,
 } from "lucide-react";
 import {
@@ -232,7 +230,6 @@ const COLOR_PALETTES: { label: string; colors: PaintOption[] }[] = [
 ];
 const DEFAULT_PAINT = COLOR_PALETTES[0].colors[0];
 
-const CARD_BORDER_SWATCHES = ["#facc15", "#f97316", "#38bdf8", "#22c55e", "#a78bfa", "#f8fafc", "#0f172a"];
 const TYPE_ICON_STYLES: Record<PokemonType, { label: string; glyph: string; color: string; textColor?: string }> = {
   normal: { label: "Normal", glyph: "★", color: "#c9c3b8", textColor: "#1f2937" },
   fire: { label: "Fire", glyph: "♨", color: "#f97316" },
@@ -325,7 +322,7 @@ const WIZARD_STEPS: WizardStep[] = [
     eyebrow: "04",
     title: "Build the card",
     caption:
-      "Set the HP and styling — AI writes the attacks. This is a flat draft; the minted card will look far better.",
+      "Choose only HP, rarity, and illustrator credit. AI fills in the rest for a kid-friendly card.",
   },
   {
     id: "mint",
@@ -723,14 +720,13 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [cardImageUrl, setCardImageUrl] = useState("");
-  const [selectedBackground, setSelectedBackground] = useState(backgrounds[0]?.src ?? "");
-  const [backgroundPrompt, setBackgroundPrompt] = useState("sunny meadow training arena");
-  const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
+  const [selectedBackground] = useState(backgrounds[0]?.src ?? "");
+  const [backgroundPrompt] = useState("sunny meadow training arena");
   const [cardHp, setCardHp] = useState(340);
   const [cardType, setCardType] = useState<PokemonType>(selectedPokemon.type);
   const [cardRarity, setCardRarity] = useState(DEFAULT_CARD_RARITY.id);
-  const [illustratorName, setIllustratorName] = useState("Nikhil");
-  const [cardBorderColor, setCardBorderColor] = useState("#374151");
+  const [illustratorName, setIllustratorName] = useState("");
+  const [cardBorderColor] = useState("#374151");
   const [cardStage, setCardStage] = useState("Stage 1");
   const [evolvesFrom, setEvolvesFrom] = useState("Riolu");
   const [isExCard, setIsExCard] = useState(true);
@@ -744,7 +740,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
   const [cardNumber, setCardNumber] = useState("179/132");
   const [mintedCardUrl, setMintedCardUrl] = useState("");
   const [isMintingCard, setIsMintingCard] = useState(false);
-  const [isGeneratingCardCopy, setIsGeneratingCardCopy] = useState(false);
+  const [, setIsGeneratingCardCopy] = useState(false);
   const cardTypeStyle = TYPE_ICON_STYLES[cardType];
   const selectedCardRarity =
     CARD_RARITY_OPTIONS.find((rarity) => rarity.id === cardRarity) ??
@@ -1601,31 +1597,6 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     printWindow.document.close();
   }
 
-  async function generateBackground() {
-    setIsGeneratingBackground(true);
-    setStatus("Generating card background");
-
-    try {
-      const response = await fetch("/api/background-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: backgroundPrompt, model }),
-      });
-      const result = await readGenerateResponse(response);
-
-      if (!response.ok || !result.imageUrl) {
-        throw new Error(result.error || "Could not generate background.");
-      }
-
-      setSelectedBackground(result.imageUrl);
-      setStatus("Generated background selected");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Background generation failed");
-    } finally {
-      setIsGeneratingBackground(false);
-    }
-  }
-
   async function generateCardCopy() {
     setIsGeneratingCardCopy(true);
     setStatus("Writing card attacks with AI");
@@ -1994,7 +1965,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                   </div>
                   <div className="rounded-xl bg-white/8 p-3">
                     <p className="text-[9px] font-black uppercase text-white/35">Stage</p>
-                    <p className="mt-1 truncate text-sm font-black">{cardStage}</p>
+                    <p className="mt-1 truncate text-sm font-black">AI picked</p>
                   </div>
                 </div>
               </div>
@@ -2559,199 +2530,48 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                         </div>
                       </div>
 
-                      <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
-                        Type
-                        <select className="h-11 rounded-lg border-2 border-slate-200 bg-white px-3 normal-case text-slate-950" value={cardType} onChange={(event) => setCardType(event.target.value as PokemonType)}>
-                          {POKEMON_TYPE_GROUPS.map((group) => (
-                            <option key={`${group.id}-details-type`} value={group.id}>{group.label}</option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <div className="grid gap-2 rounded-[18px] border border-slate-200 bg-white p-4">
-                        <p className="text-xs font-black uppercase text-slate-500">Rarity</p>
-                        <div className="grid grid-cols-4 gap-2 max-[620px]:grid-cols-2">
-                          {CARD_RARITY_OPTIONS.map((rarity) => (
-                            <button
-                              key={`${rarity.id}-details`}
-                              className={`flex items-center gap-2 rounded-xl border-2 p-2 text-left transition ${
-                                cardRarity === rarity.id
-                                  ? "border-slate-950 bg-slate-950 text-white"
-                                  : "border-slate-200 bg-white text-slate-950 hover:border-slate-300"
-                              }`}
-                              type="button"
-                              onClick={() => setCardRarity(rarity.id)}
-                            >
-                              <span
-                                className="grid size-8 shrink-0 place-items-center rounded-full text-base font-black text-white"
-                                style={{ backgroundColor: rarity.accent }}
-                              >
-                                {rarity.symbol}
-                              </span>
-                              <span className="min-w-0 truncate text-xs font-black">{rarity.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-3 max-[620px]:grid-cols-2">
-                        <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
-                          Stage
-                          <select className="h-11 rounded-lg border-2 border-slate-200 bg-white px-3 text-slate-950" value={cardStage} onChange={(event) => setCardStage(event.target.value)}>
-                            <option>Basic</option>
-                            <option>Stage 1</option>
-                            <option>Stage 2</option>
-                            <option>Mega</option>
-                          </select>
-                        </label>
-                        <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
-                          Evolves from
-                          <input className="h-11 rounded-lg border-2 border-slate-200 px-3 normal-case text-slate-950" value={evolvesFrom} onChange={(event) => setEvolvesFrom(event.target.value)} />
-                        </label>
-                        <label className="flex h-11 items-center gap-2 rounded-lg border-2 border-slate-200 px-3 text-xs font-black uppercase text-slate-500">
-                          <input checked={isExCard} type="checkbox" onChange={(event) => setIsExCard(event.target.checked)} />
-                          ex
-                        </label>
-                      </div>
-
-                      <div className="grid gap-3 rounded-[18px] border border-slate-200 bg-white p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="flex items-center gap-1.5 text-sm font-black text-slate-950">
-                              <Swords aria-hidden="true" className="text-slate-500" size={15} />
-                              Attacks &amp; battle stats
-                            </p>
-                            <p className="truncate text-xs font-bold text-slate-500">
-                              Written by AI to match {selectedPokemon.name} — tap regenerate for new ones.
-                            </p>
-                          </div>
-                          <button
-                            className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-black text-white disabled:opacity-40"
-                            disabled={isGeneratingCardCopy}
-                            type="button"
-                            onClick={() => void generateCardCopy()}
-                          >
-                            {isGeneratingCardCopy ? (
-                              <Loader2 aria-hidden="true" className="animate-spin" size={14} />
-                            ) : (
-                              <RefreshCw aria-hidden="true" size={14} />
-                            )}
-                            {isGeneratingCardCopy ? "Writing" : "Regenerate"}
-                          </button>
-                        </div>
-
-                        {isGeneratingCardCopy ? (
-                          <div className="grid place-items-center gap-2 rounded-xl bg-slate-50 py-7 text-slate-400">
-                            <Loader2 aria-hidden="true" className="animate-spin" size={22} />
-                            <p className="text-xs font-black uppercase">Writing attacks…</p>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="grid gap-2">
-                              {[
-                                { name: attackOneName, damage: attackOneDamage, energy: 2 },
-                                { name: attackTwoName, damage: attackTwoDamage, energy: 3 },
-                              ].map((attack, index) => (
-                                <div
-                                  key={`attack-readout-${index}`}
-                                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
-                                >
-                                  <div className="flex -space-x-1">
-                                    {Array.from({ length: attack.energy }).map((_, costIndex) => (
-                                      <span
-                                        key={`attack-${index}-cost-${costIndex}`}
-                                        className="grid size-5 place-items-center rounded-full border border-white text-[10px] font-black shadow-sm"
-                                        style={{
-                                          backgroundColor: cardTypeStyle.color,
-                                          color: cardTypeStyle.textColor ?? "#ffffff",
-                                        }}
-                                      >
-                                        {cardTypeStyle.glyph}
-                                      </span>
-                                    ))}
-                                  </div>
-                                  <span className="truncate text-sm font-black text-slate-950">{attack.name}</span>
-                                  <span className="text-lg font-black text-slate-950">{attack.damage}</span>
-                                </div>
-                              ))}
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 text-center max-[430px]:grid-cols-1">
-                              {[
-                                { label: "Weakness", value: weakness },
-                                { label: "Resistance", value: resistance },
-                                { label: "Retreat", value: retreatCost },
-                              ].map((stat) => (
-                                <div key={stat.label} className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-2">
-                                  <p className="text-[10px] font-black uppercase text-slate-400">{stat.label}</p>
-                                  <p className="mt-0.5 text-sm font-black text-slate-950">{stat.value || "—"}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                      </div>
-
                       <div className="grid grid-cols-2 gap-3 max-[620px]:grid-cols-1">
                         <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
                           Illustrator
-                          <input className="h-11 rounded-lg border-2 border-slate-200 px-3 normal-case text-slate-950" value={illustratorName} onChange={(event) => setIllustratorName(event.target.value)} />
-                        </label>
-                        <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
-                          Card number
-                          <input className="h-11 rounded-lg border-2 border-slate-200 px-3 text-slate-950" value={cardNumber} onChange={(event) => setCardNumber(event.target.value)} />
-                        </label>
-                      </div>
-
-                      <div className="grid gap-2 rounded-[18px] border border-slate-200 bg-white p-4">
-                        <p className="text-xs font-black uppercase text-slate-500">Border</p>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {CARD_BORDER_SWATCHES.map((swatch) => (
-                            <button
-                              key={swatch}
-                              aria-label={`Use card border ${swatch}`}
-                              className={`size-9 rounded-lg border-2 shadow-sm ${
-                                cardBorderColor === swatch ? "border-slate-950" : "border-white ring-1 ring-slate-200"
-                              }`}
-                              style={{ backgroundColor: swatch }}
-                              type="button"
-                              onClick={() => setCardBorderColor(swatch)}
-                            />
-                          ))}
                           <input
-                            aria-label="Custom card border"
-                            className="size-10 rounded-lg border-2 border-slate-200 bg-white p-1"
-                            type="color"
-                            value={cardBorderColor}
-                            onChange={(event) => setCardBorderColor(event.target.value)}
+                            className="h-11 rounded-lg border-2 border-slate-200 px-3 normal-case text-slate-950"
+                            placeholder="Leave blank or write your name"
+                            value={illustratorName}
+                            onChange={(event) => setIllustratorName(event.target.value)}
                           />
+                        </label>
+                        <div className="rounded-[18px] border border-slate-200 bg-white p-4">
+                          <p className="text-xs font-black uppercase text-slate-500">Rarity</p>
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            {CARD_RARITY_OPTIONS.map((rarity) => (
+                              <button
+                                key={`${rarity.id}-details`}
+                                className={`flex items-center gap-2 rounded-xl border-2 p-2 text-left transition ${
+                                  cardRarity === rarity.id
+                                    ? "border-slate-950 bg-slate-950 text-white"
+                                    : "border-slate-200 bg-white text-slate-950 hover:border-slate-300"
+                                }`}
+                                type="button"
+                                onClick={() => setCardRarity(rarity.id)}
+                              >
+                                <span
+                                  className="grid size-8 shrink-0 place-items-center rounded-full text-base font-black text-white"
+                                  style={{ backgroundColor: rarity.accent }}
+                                >
+                                  {rarity.symbol}
+                                </span>
+                                <span className="min-w-0 truncate text-xs font-black">{rarity.label}</span>
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="grid gap-3 rounded-[18px] border border-slate-200 bg-white p-4">
-                        <p className="text-xs font-black uppercase text-slate-500">Background</p>
-                        <select className="h-11 rounded-lg border-2 border-slate-200 bg-white px-3 text-slate-950" value={selectedBackground} onChange={(event) => setSelectedBackground(event.target.value)}>
-                          <option value="">Blank studio</option>
-                          {backgrounds.map((background) => (
-                            <option key={background.src} value={background.src}>{background.name}</option>
-                          ))}
-                        </select>
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                          <input
-                            aria-label="Background prompt"
-                            className="h-11 rounded-lg border-2 border-slate-200 px-3 text-sm normal-case text-slate-950"
-                            value={backgroundPrompt}
-                            onChange={(event) => setBackgroundPrompt(event.target.value)}
-                          />
-                          <button
-                            className="flex h-11 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-black text-white disabled:opacity-40"
-                            disabled={isGeneratingBackground || !backgroundPrompt.trim()}
-                            type="button"
-                            onClick={() => void generateBackground()}
-                          >
-                            {isGeneratingBackground ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : <Sparkles aria-hidden="true" size={16} />}
-                            Generate
-                          </button>
-                        </div>
+                      <div className="flex items-start gap-2 rounded-[14px] border border-sky-200 bg-sky-50 p-3 text-left">
+                        <Sparkles aria-hidden="true" className="mt-0.5 shrink-0 text-sky-600" size={16} />
+                        <p className="text-xs font-bold leading-snug text-sky-900">
+                          That&apos;s it — AI thoughtfully chooses the type, stage, attacks, border, and scene so the final card focuses on big HP, readable illustrator credit, bold colors, and details a 7-year-old will notice first.
+                        </p>
                       </div>
                     </div>
                   </div>
