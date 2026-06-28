@@ -1,4 +1,9 @@
-import { CARD_RENDER_SIZE } from "@/lib/card";
+import {
+  CARD_ASPECT_RATIO,
+  CARD_RENDER_HEIGHT,
+  CARD_RENDER_SIZE,
+  CARD_RENDER_WIDTH,
+} from "@/lib/card";
 import { listMintedCards, saveMintedCard } from "@/lib/minted-cards";
 
 export const runtime = "nodejs";
@@ -72,7 +77,11 @@ Preserve all real card text exactly as supplied, with no invented or hallucinate
 
 Critical HP requirement: the final rendered card MUST show exactly "${exactHpText}" in the HP area. Copy those digits character-for-character. Do not round, cap, abbreviate, omit, restyle into a different number, or substitute any other HP value. If the HP is visually awkward because it is long, preserve the exact text anyway and fit it into the HP area.
 
-Framing requirement (most important for layout): output ONLY the card front, and make the card fill the entire image edge to edge. The rendered card must occupy 100% of the frame with no surrounding scene whatsoever — no table, desk, hand, holder, sleeve, mat, easel, or background surface; no drop shadow, no photo border, no rounded photo frame, and no empty margins around the card. Render it as a flat, perfectly head-on scan of the card front in portrait orientation. The card's own printed edge IS the outer edge of the image, with no visible card thickness or 3D perspective. Do not depict the card sitting on or photographed against anything.
+Output dimensions (hard requirement): the output image MUST be exactly ${CARD_RENDER_WIDTH} pixels wide by ${CARD_RENDER_HEIGHT} pixels tall — a single ${CARD_ASPECT_RATIO} trading-card frame. Do not change, crop, pad, or letterbox these proportions.
+
+Single-card requirement (most important): render EXACTLY ONE card that fills the entire ${CARD_RENDER_WIDTH}x${CARD_RENDER_HEIGHT} frame. Never output two or more cards, a side-by-side pair, a normal-versus-holographic or before/after comparison, mirrored or duplicate copies, a grid, a sheet, a contact sheet, multiple variants, or any second card or partial card anywhere in the image. There is one card and one card only.
+
+Framing requirement (most important for layout): output ONLY the card front, and make the single card fill the entire image edge to edge. The rendered card must occupy 100% of the frame with no surrounding scene whatsoever — no table, desk, hand, holder, sleeve, mat, easel, or background surface; no drop shadow, no photo border, no rounded photo frame, and no empty margins, gaps, or whitespace around or beside the card. Render it as a flat, perfectly head-on scan of the card front in portrait orientation. The card's own printed edge IS the outer edge of the image, with no visible card thickness or 3D perspective. Do not depict the card sitting on or photographed against anything.
 
 Art direction: keep a premium printed finish applied to the card surface itself — glossy laminated stock, fine print texture, crisp ink, and a subtle foil/holo sheen on the frame and rarity. Do not add environmental lighting, studio reflections, or scene shadows around the card.
 
@@ -80,7 +89,7 @@ Color constraints: preserve the color scheme from the user's colored-in line art
 
 The illustrator credit must be clearly readable on the lower portion of the card as "Illus. ${illustratorName}", not hidden in microtext. The rarity symbol ${cardRaritySymbol} must appear near the collector number.
 
-Text constraints: do not add any extra labels, fake rules, fake copyright lines, random numbers, decorative glyph words, logos, or watermark text. If any text is unclear, keep the supplied card text above rather than inventing replacements. The exact HP text "${exactHpText}" is the highest-priority text requirement. The result should be a high-resolution realistic card front that fills the frame, not a blank template and not a photo of a card in a scene.`;
+Text constraints: do not add any extra labels, fake rules, fake copyright lines, random numbers, decorative glyph words, logos, or watermark text. If any text is unclear, keep the supplied card text above rather than inventing replacements. The exact HP text "${exactHpText}" is the highest-priority text requirement. The result should be a single high-resolution realistic card front that fills the ${CARD_RENDER_WIDTH}x${CARD_RENDER_HEIGHT} frame, not a blank template, not a photo of a card in a scene, and never two cards or a side-by-side pair.`;
 }
 
 async function readOpenRouterJson(response: Response) {
