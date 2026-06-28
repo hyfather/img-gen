@@ -33,6 +33,8 @@ import {
   type PokemonType,
 } from "@/lib/pokemon";
 import {
+  A4_HEIGHT_IN,
+  A4_WIDTH_IN,
   CARD_PRINT_HEIGHT_IN,
   CARD_PRINT_WIDTH_IN,
   CARD_RENDER_HEIGHT,
@@ -1578,17 +1580,23 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     }
 
     const title = `${selectedPokemon.name}${isExCard ? " ex" : ""} card`;
-    // The minted image is a full-bleed card front; print it at the real
-    // trading-card size (2.5in x 3.5in) with no page margins.
+    // The minted image is a full-bleed card front. Print it on a standard A4
+    // sheet, centered, at the real trading-card size (2.5in x 3.5in) so it can
+    // be cut out to exact real-world dimensions. A thin cut guide marks the
+    // card edge.
     printWindow.document.write(
       `<!doctype html><html><head><meta charset="utf-8" /><title>${title}</title>` +
         `<style>` +
-        `@page { size: ${CARD_PRINT_WIDTH_IN}in ${CARD_PRINT_HEIGHT_IN}in; margin: 0; }` +
+        `@page { size: ${A4_WIDTH_IN}in ${A4_HEIGHT_IN}in; margin: 0; }` +
         `html, body { margin: 0; padding: 0; background: #ffffff; }` +
-        `img { width: ${CARD_PRINT_WIDTH_IN}in; height: ${CARD_PRINT_HEIGHT_IN}in; object-fit: contain; display: block; margin: 0 auto; }` +
+        `.sheet { width: ${A4_WIDTH_IN}in; height: ${A4_HEIGHT_IN}in; display: flex; align-items: center; justify-content: center; }` +
+        `.card { width: ${CARD_PRINT_WIDTH_IN}in; height: ${CARD_PRINT_HEIGHT_IN}in; outline: 1px dashed #94a3b8; }` +
+        `.card img { width: 100%; height: 100%; object-fit: contain; display: block; }` +
         `@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }` +
         `</style></head><body>` +
+        `<div class="sheet"><div class="card">` +
         `<img src="${mintedCardUrl}" alt="${title}" onload="window.focus();window.print();" />` +
+        `</div></div>` +
         `</body></html>`,
     );
     printWindow.document.close();
