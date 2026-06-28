@@ -61,7 +61,7 @@ function promptForRealisticCard(body: MintCardRequest) {
   const evolvesFrom = textValue(body.evolvesFrom, pokemonName);
   const cardRarity = textValue(body.cardRarity, "Common");
   const cardRaritySymbol = textValue(body.cardRaritySymbol, "●");
-  const illustratorName = textValue(body.illustratorName, "Unknown");
+  const illustratorName = textValue(body.illustratorName);
   const cardBorderColor = textValue(body.cardBorderColor);
   const attacks = Array.isArray(body.attacks) ? (body.attacks as CardAttack[]) : [];
   const attackText = attacks
@@ -83,11 +83,11 @@ Single-card requirement (most important): render EXACTLY ONE card that fills the
 
 Framing requirement (most important for layout): output ONLY the card front, and make the single card fill the entire image edge to edge. The rendered card must occupy 100% of the frame with no surrounding scene whatsoever — no table, desk, hand, holder, sleeve, mat, easel, or background surface; no drop shadow, no photo border, no rounded photo frame, and no empty margins, gaps, or whitespace around or beside the card. Render it as a flat, perfectly head-on scan of the card front in portrait orientation. The card's own printed edge IS the outer edge of the image, with no visible card thickness or 3D perspective. Do not depict the card sitting on or photographed against anything.
 
-Art direction: keep a premium printed finish applied to the card surface itself — glossy laminated stock, fine print texture, crisp ink, and a subtle foil/holo sheen on the frame and rarity. Do not add environmental lighting, studio reflections, or scene shadows around the card.
+Art direction: make this exciting and easy for a 7-year-old to love at a glance: big heroic character art, bold readable HP, bright playful energy, shiny collectible details, and a clear illustrator credit. Keep a premium printed finish applied to the card surface itself — glossy laminated stock, fine print texture, crisp ink, and a subtle foil/holo sheen on the frame and rarity. Do not add environmental lighting, studio reflections, or scene shadows around the card.
 
 Color constraints: preserve the color scheme from the user's colored-in line art and flat card preview. The Pokemon body colors, accent colors, fill colors, border color, type color, and background palette must remain recognizably the same as the provided image.${cardBorderColor ? ` The outer card frame/border must match the supplied color ${cardBorderColor}.` : ""} You may add gloss and foil shimmer on the card surface, but do not recolor the Pokemon, swap the palette, or introduce unrelated dominant colors.
 
-The illustrator credit must be clearly readable on the lower portion of the card as "Illus. ${illustratorName}", not hidden in microtext. The rarity symbol ${cardRaritySymbol} must appear near the collector number.
+The two most important readable details are the HP and illustrator credit. The illustrator credit must be clearly readable on the lower portion of the card as "Illus. ${illustratorName}", not hidden in microtext. The rarity symbol ${cardRaritySymbol} must appear near the collector number.
 
 Text constraints: do not add any extra labels, fake rules, fake copyright lines, random numbers, decorative glyph words, logos, or watermark text. If any text is unclear, keep the supplied card text above rather than inventing replacements. The exact HP text "${exactHpText}" is the highest-priority text requirement. The result should be a single high-resolution realistic card front that fills the ${CARD_RENDER_WIDTH}x${CARD_RENDER_HEIGHT} frame, not a blank template, not a photo of a card in a scene, and never two cards or a side-by-side pair.`;
 }
@@ -169,7 +169,7 @@ export async function POST(request: Request) {
 
     const card = await saveMintedCard({
       base64,
-      illustratorName: textValue(body.illustratorName, "Unknown illustrator"),
+      illustratorName: textValue(body.illustratorName),
       pokemonName: textValue(body.pokemonName, "minted-card"),
     });
 
