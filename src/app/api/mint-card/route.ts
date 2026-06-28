@@ -23,6 +23,7 @@ type MintCardRequest = {
   cardRarity?: unknown;
   cardRaritySymbol?: unknown;
   illustratorName?: unknown;
+  cardBorderColor?: unknown;
   backgroundPrompt?: unknown;
   model?: unknown;
 };
@@ -56,6 +57,7 @@ function promptForRealisticCard(body: MintCardRequest) {
   const cardRarity = textValue(body.cardRarity, "Common");
   const cardRaritySymbol = textValue(body.cardRaritySymbol, "●");
   const illustratorName = textValue(body.illustratorName, "Unknown");
+  const cardBorderColor = textValue(body.cardBorderColor);
   const attacks = Array.isArray(body.attacks) ? (body.attacks as CardAttack[]) : [];
   const attackText = attacks
     .map((attack) => `${textValue(attack.name, "Attack")} ${textValue(attack.damage)}`.trim())
@@ -74,7 +76,7 @@ Framing requirement (most important for layout): output ONLY the card front, and
 
 Art direction: keep a premium printed finish applied to the card surface itself — glossy laminated stock, fine print texture, crisp ink, and a subtle foil/holo sheen on the frame and rarity. Do not add environmental lighting, studio reflections, or scene shadows around the card.
 
-Color constraints: preserve the color scheme from the user's colored-in line art and flat card preview. The Pokemon body colors, accent colors, fill colors, border color, type color, and background palette must remain recognizably the same as the provided image. You may add gloss and foil shimmer on the card surface, but do not recolor the Pokemon, swap the palette, or introduce unrelated dominant colors.
+Color constraints: preserve the color scheme from the user's colored-in line art and flat card preview. The Pokemon body colors, accent colors, fill colors, border color, type color, and background palette must remain recognizably the same as the provided image.${cardBorderColor ? ` The outer card frame/border must match the supplied color ${cardBorderColor}.` : ""} You may add gloss and foil shimmer on the card surface, but do not recolor the Pokemon, swap the palette, or introduce unrelated dominant colors.
 
 The illustrator credit must be clearly readable on the lower portion of the card as "Illus. ${illustratorName}", not hidden in microtext. The rarity symbol ${cardRaritySymbol} must appear near the collector number.
 

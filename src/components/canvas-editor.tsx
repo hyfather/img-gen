@@ -6,14 +6,18 @@ import {
   ChevronRight,
   Download,
   Eraser,
+  Heart,
   Images,
   Image as ImageIcon,
+  Info,
   Layers,
   Loader2,
   PaintBucket,
   Plus,
   Printer,
+  RefreshCw,
   Sparkles,
+  Swords,
   Undo2,
 } from "lucide-react";
 import {
@@ -318,14 +322,16 @@ const WIZARD_STEPS: WizardStep[] = [
     label: "Details",
     eyebrow: "04",
     title: "Build the card",
-    caption: "Tune the stats, attacks, and artwork — the preview updates live.",
+    caption:
+      "Set the HP and styling — AI writes the attacks. This is a flat draft; the minted card will look far better.",
   },
   {
     id: "mint",
     label: "Mint",
     eyebrow: "05",
     title: "Mint the card",
-    caption: "Render a realistic premium card and save it to your gallery.",
+    caption:
+      "Mint to render a realistic, premium foil card — it'll look much better than the draft preview.",
   },
 ];
 const CARD_RARITY_OPTIONS: CardRarityOption[] = [
@@ -336,8 +342,23 @@ const CARD_RARITY_OPTIONS: CardRarityOption[] = [
 ];
 const DEFAULT_CARD_RARITY = CARD_RARITY_OPTIONS[0];
 
+// HP is chosen with a slider, so keep it inside a realistic trading-card range
+// and snapped to the tens that real cards use.
+const CARD_HP_MIN = 30;
+const CARD_HP_MAX = 400;
+const CARD_HP_STEP = 10;
+
 function clampCardHp(value: number) {
-  return Math.min(999999, Math.max(10, Math.round(value) || 10));
+  const snapped = Math.round((value || CARD_HP_MIN) / CARD_HP_STEP) * CARD_HP_STEP;
+
+  return Math.min(CARD_HP_MAX, Math.max(CARD_HP_MIN, snapped));
+}
+
+function cardHpTier(hp: number) {
+  if (hp <= 120) return "Frail";
+  if (hp <= 250) return "Balanced";
+  if (hp <= 340) return "Tanky";
+  return "Legendary";
 }
 
 function loadImage(src: string) {
@@ -1361,10 +1382,11 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
         placeOnCard();
       }
 
-      // Auto-write attacks the first time we stage a given Pokemon, but never
-      // clobber edits the user already made on a later visit.
+      // Attacks are AI-written (no manual editing), so make sure they exist the
+      // first time we stage a given Pokemon — both when building the card and
+      // before minting, in case the user jumps straight to the Mint step.
       if (
-        nextStep === "details" &&
+        (nextStep === "details" || nextStep === "mint") &&
         imageUrl &&
         generatedCopyForRef.current !== selectedPokemon.name
       ) {
@@ -1524,6 +1546,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
           cardRarity: selectedCardRarity.label,
           cardRaritySymbol: selectedCardRarity.symbol,
           illustratorName,
+          cardBorderColor,
           backgroundPrompt,
         }),
       });
@@ -1981,11 +2004,12 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                   return (
                     <button
                       key={`${step.id}-rail`}
-                      className={`grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${
+                      className={`grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
                         isActive
                           ? "border-white/35 bg-white text-slate-950"
                           : "border-white/10 bg-white/6 text-white hover:bg-white/10"
                       }`}
+                      disabled={isMintingCard}
                       type="button"
                       onClick={() => goToWizardStep(step.id)}
                     >
@@ -2059,9 +2083,10 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                       <button
                         key={`${step.id}-mobile-rail`}
                         aria-label={step.label}
-                        className={`h-2 rounded-full transition ${
+                        className={`h-2 rounded-full transition disabled:opacity-50 ${
                           isActive || isComplete ? "bg-slate-950" : "bg-slate-200"
                         }`}
+                        disabled={isMintingCard}
                         type="button"
                         onClick={() => goToWizardStep(step.id)}
                       />
@@ -2471,6 +2496,9 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                 {wizardStep === "details" ? (
                   <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
                     <div className="grid min-w-0 grid-cols-1 content-start gap-3 lg:sticky lg:top-0">
+                      <span className="mx-auto -mb-1 rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                        Draft preview
+                      </span>
                       {cardPreviewNode}
                       {!cardImageUrl && imageUrl ? (
                         <button
@@ -2482,49 +2510,56 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                           Place colored art on card
                         </button>
                       ) : null}
+                      <div className="flex items-start gap-2 rounded-[14px] border border-amber-200 bg-amber-50 p-3 text-left">
+                        <Info aria-hidden="true" className="mt-0.5 shrink-0 text-amber-600" size={16} />
+                        <p className="text-xs font-bold leading-snug text-amber-900">
+                          This is a quick draft. When you mint, AI redraws it as a realistic, glossy
+                          collectible — sharper art, foil shine, and a premium printed finish.
+                        </p>
+                      </div>
                     </div>
 
                     <div className="grid min-w-0 grid-cols-1 content-start gap-4">
-                      <div className="flex items-center justify-between gap-3 rounded-[18px] border border-slate-200 bg-white p-4">
-                        <div className="min-w-0">
-                          <p className="text-sm font-black text-slate-950">Card text</p>
-                          <p className="truncate text-xs font-bold text-slate-500">
-                            Auto-written from the Pokemon — edit anything below.
+                      <div className="grid gap-3 rounded-[18px] border border-slate-200 bg-white p-4">
+                        <div className="flex items-end justify-between gap-3">
+                          <p className="flex items-center gap-1.5 text-xs font-black uppercase text-slate-500">
+                            <Heart aria-hidden="true" size={14} style={{ color: cardTypeStyle.color }} />
+                            Hit points
+                          </p>
+                          <p className="flex items-baseline gap-1.5">
+                            <span className="text-3xl font-black leading-none text-slate-950">{cardHp}</span>
+                            <span className="text-xs font-black uppercase text-slate-400">HP</span>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase text-slate-500">
+                              {cardHpTier(cardHp)}
+                            </span>
                           </p>
                         </div>
-                        <button
-                          className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-black text-white disabled:opacity-40"
-                          disabled={isGeneratingCardCopy}
-                          type="button"
-                          onClick={() => void generateCardCopy()}
-                        >
-                          {isGeneratingCardCopy ? <Loader2 aria-hidden="true" className="animate-spin" size={14} /> : <Sparkles aria-hidden="true" size={14} />}
-                          Auto-write
-                        </button>
+                        <input
+                          aria-label="HP"
+                          className="w-full cursor-pointer"
+                          max={CARD_HP_MAX}
+                          min={CARD_HP_MIN}
+                          step={CARD_HP_STEP}
+                          style={{ accentColor: cardTypeStyle.color }}
+                          type="range"
+                          value={cardHp}
+                          onChange={(event) => setCardHp(clampCardHp(Number(event.target.value)))}
+                        />
+                        <div className="flex justify-between text-[10px] font-black uppercase text-slate-400">
+                          <span>{CARD_HP_MIN}</span>
+                          <span>Frail · Balanced · Tanky</span>
+                          <span>{CARD_HP_MAX}</span>
+                        </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 max-[620px]:grid-cols-1">
-                        <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
-                          HP
-                          <input
-                            className="h-11 rounded-lg border-2 border-slate-200 px-3 text-base font-black normal-case text-slate-950"
-                            inputMode="numeric"
-                            max="999999"
-                            min="10"
-                            type="number"
-                            value={cardHp}
-                            onChange={(event) => setCardHp(clampCardHp(Number(event.target.value)))}
-                          />
-                        </label>
-                        <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
-                          Type
-                          <select className="h-11 rounded-lg border-2 border-slate-200 bg-white px-3 text-slate-950" value={cardType} onChange={(event) => setCardType(event.target.value as PokemonType)}>
-                            {POKEMON_TYPE_GROUPS.map((group) => (
-                              <option key={`${group.id}-details-type`} value={group.id}>{group.label}</option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
+                      <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
+                        Type
+                        <select className="h-11 rounded-lg border-2 border-slate-200 bg-white px-3 normal-case text-slate-950" value={cardType} onChange={(event) => setCardType(event.target.value as PokemonType)}>
+                          {POKEMON_TYPE_GROUPS.map((group) => (
+                            <option key={`${group.id}-details-type`} value={group.id}>{group.label}</option>
+                          ))}
+                        </select>
+                      </label>
 
                       <div className="grid gap-2 rounded-[18px] border border-slate-200 bg-white p-4">
                         <p className="text-xs font-black uppercase text-slate-500">Rarity</p>
@@ -2573,27 +2608,80 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                       </div>
 
                       <div className="grid gap-3 rounded-[18px] border border-slate-200 bg-white p-4">
-                        <p className="text-xs font-black uppercase text-slate-500">Attacks</p>
-                        <div className="grid grid-cols-[1fr_84px] gap-2">
-                          <input aria-label="Attack 1 name" className="h-11 rounded-lg border-2 border-slate-200 px-3 text-sm font-black normal-case text-slate-950" value={attackOneName} onChange={(event) => setAttackOneName(event.target.value)} />
-                          <input aria-label="Attack 1 damage" className="h-11 rounded-lg border-2 border-slate-200 px-3 text-sm font-black text-slate-950" value={attackOneDamage} onChange={(event) => setAttackOneDamage(event.target.value)} />
-                          <input aria-label="Attack 2 name" className="h-11 rounded-lg border-2 border-slate-200 px-3 text-sm font-black normal-case text-slate-950" value={attackTwoName} onChange={(event) => setAttackTwoName(event.target.value)} />
-                          <input aria-label="Attack 2 damage" className="h-11 rounded-lg border-2 border-slate-200 px-3 text-sm font-black text-slate-950" value={attackTwoDamage} onChange={(event) => setAttackTwoDamage(event.target.value)} />
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="flex items-center gap-1.5 text-sm font-black text-slate-950">
+                              <Swords aria-hidden="true" className="text-slate-500" size={15} />
+                              Attacks &amp; battle stats
+                            </p>
+                            <p className="truncate text-xs font-bold text-slate-500">
+                              Written by AI to match {selectedPokemon.name} — tap regenerate for new ones.
+                            </p>
+                          </div>
+                          <button
+                            className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-black text-white disabled:opacity-40"
+                            disabled={isGeneratingCardCopy}
+                            type="button"
+                            onClick={() => void generateCardCopy()}
+                          >
+                            {isGeneratingCardCopy ? (
+                              <Loader2 aria-hidden="true" className="animate-spin" size={14} />
+                            ) : (
+                              <RefreshCw aria-hidden="true" size={14} />
+                            )}
+                            {isGeneratingCardCopy ? "Writing" : "Regenerate"}
+                          </button>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 max-[430px]:grid-cols-1">
-                          <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
-                            Weakness
-                            <input className="h-11 rounded-lg border-2 border-slate-200 px-3 text-slate-950" value={weakness} onChange={(event) => setWeakness(event.target.value)} />
-                          </label>
-                          <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
-                            Resist
-                            <input className="h-11 rounded-lg border-2 border-slate-200 px-3 text-slate-950" value={resistance} onChange={(event) => setResistance(event.target.value)} />
-                          </label>
-                          <label className="grid gap-1 text-xs font-black uppercase text-slate-500">
-                            Retreat
-                            <input className="h-11 rounded-lg border-2 border-slate-200 px-3 text-slate-950" value={retreatCost} onChange={(event) => setRetreatCost(event.target.value)} />
-                          </label>
-                        </div>
+
+                        {isGeneratingCardCopy ? (
+                          <div className="grid place-items-center gap-2 rounded-xl bg-slate-50 py-7 text-slate-400">
+                            <Loader2 aria-hidden="true" className="animate-spin" size={22} />
+                            <p className="text-xs font-black uppercase">Writing attacks…</p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="grid gap-2">
+                              {[
+                                { name: attackOneName, damage: attackOneDamage, energy: 2 },
+                                { name: attackTwoName, damage: attackTwoDamage, energy: 3 },
+                              ].map((attack, index) => (
+                                <div
+                                  key={`attack-readout-${index}`}
+                                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
+                                >
+                                  <div className="flex -space-x-1">
+                                    {Array.from({ length: attack.energy }).map((_, costIndex) => (
+                                      <span
+                                        key={`attack-${index}-cost-${costIndex}`}
+                                        className="grid size-5 place-items-center rounded-full border border-white text-[10px] font-black shadow-sm"
+                                        style={{
+                                          backgroundColor: cardTypeStyle.color,
+                                          color: cardTypeStyle.textColor ?? "#ffffff",
+                                        }}
+                                      >
+                                        {cardTypeStyle.glyph}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  <span className="truncate text-sm font-black text-slate-950">{attack.name}</span>
+                                  <span className="text-lg font-black text-slate-950">{attack.damage}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-center max-[430px]:grid-cols-1">
+                              {[
+                                { label: "Weakness", value: weakness },
+                                { label: "Resistance", value: resistance },
+                                { label: "Retreat", value: retreatCost },
+                              ].map((stat) => (
+                                <div key={stat.label} className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-2">
+                                  <p className="text-[10px] font-black uppercase text-slate-400">{stat.label}</p>
+                                  <p className="mt-0.5 text-sm font-black text-slate-950">{stat.value || "—"}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-3 max-[620px]:grid-cols-1">
@@ -2673,15 +2761,18 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                         </>
                       ) : cardImageUrl ? (
                         <div className="w-[300px] max-w-full">
+                          <span className="mx-auto mb-2 block w-fit rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                            Draft preview
+                          </span>
                           {cardPreviewNode}
-                          <p className="mt-3 text-center text-xs font-black uppercase text-slate-400">
+                          <p className="mt-3 text-center text-xs font-bold leading-snug text-slate-500">
                             {isMintingCard ? (
-                              <span className="inline-flex items-center gap-2">
+                              <span className="inline-flex items-center gap-2 font-black uppercase text-slate-400">
                                 <Loader2 aria-hidden="true" className="animate-spin" size={14} />
-                                Rendering realistic card
+                                Rendering your realistic card…
                               </span>
                             ) : (
-                              "Flat preview — minting renders a realistic version"
+                              "This flat draft is just a mock-up. Minting sends it — and every detail you set — to the AI to render a realistic, premium card."
                             )}
                           </p>
                         </div>
@@ -2714,6 +2805,28 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                           {cardTypeStyle.label} · {cardHp} HP · {selectedCardRarity.label}
                         </p>
                       </div>
+                      {!mintedCardUrl ? (
+                        <div className="grid gap-2 rounded-[18px] border border-lime-200 bg-lime-50 p-4">
+                          <p className="flex items-center gap-1.5 text-xs font-black uppercase text-lime-700">
+                            <Sparkles aria-hidden="true" size={14} />
+                            What minting adds
+                          </p>
+                          <ul className="grid gap-1.5 text-xs font-bold text-lime-900">
+                            <li className="flex items-start gap-2">
+                              <Check aria-hidden="true" className="mt-0.5 shrink-0" size={14} />
+                              Realistic, redrawn artwork — sharper than the draft
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <Check aria-hidden="true" className="mt-0.5 shrink-0" size={14} />
+                              Glossy print finish with foil &amp; holo shine
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <Check aria-hidden="true" className="mt-0.5 shrink-0" size={14} />
+                              Your exact HP, attacks &amp; stats baked in
+                            </li>
+                          </ul>
+                        </div>
+                      ) : null}
                       <button
                         className="flex h-12 items-center justify-center gap-2 rounded-[14px] bg-lime-400 px-4 text-sm font-black text-slate-950 shadow-[0_12px_30px_rgba(132,204,22,0.25)] transition hover:bg-lime-300 disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none"
                         disabled={!cardImageUrl || isMintingCard}
@@ -2760,7 +2873,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
               >
                 <button
                   className="flex h-11 items-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-4 text-sm font-black text-slate-950 transition hover:border-slate-300 disabled:opacity-40"
-                  disabled={isFirstWizardStep}
+                  disabled={isFirstWizardStep || isMintingCard}
                   type="button"
                   onClick={goToPreviousWizardStep}
                 >
@@ -2783,7 +2896,7 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
                 ) : (
                   <button
                     className="flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-500"
-                    disabled={!wizardCanAdvance}
+                    disabled={!wizardCanAdvance || isMintingCard}
                     type="button"
                     onClick={goToNextWizardStep}
                   >
