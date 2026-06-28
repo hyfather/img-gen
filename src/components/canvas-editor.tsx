@@ -1515,10 +1515,10 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     setStatus("Minting realistic Pokemon card");
 
     try {
-      const finalCardImage = await composeCardPreview();
+      const finalCardImage = composeColoredPokemon(true);
 
       if (!finalCardImage) {
-        throw new Error("Place your colored Pokemon on the card before minting.");
+        throw new Error("Color your Pokemon before minting.");
       }
 
       const response = await fetch("/api/mint-card", {
