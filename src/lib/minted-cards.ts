@@ -7,6 +7,7 @@ export const MINTED_CARDS_DIR = "generated-minted-cards";
 export type MintedCard = {
   downloadUrl: string;
   pathname: string;
+  illustratorName: string;
   pokemonName: string;
   renderUrl: string;
   source: "blob" | "local";
@@ -16,6 +17,7 @@ export type MintedCard = {
 
 type SaveMintedCardOptions = {
   base64: string;
+  illustratorName: string;
   pokemonName: string;
 };
 
@@ -97,16 +99,28 @@ function renderPath(url: string) {
   return `/api/coloring-page/image?url=${encodeURIComponent(url)}`;
 }
 
-function pokemonNameFromPathname(pathname: string) {
-  const filename = pathname.split("/").pop() ?? "minted-card";
-  const slug = filename.replace(/-\d+\.png$/i, "").replace(/\.png$/i, "");
-  const words = slug.replace(/-/g, " ").trim();
+function titleCaseSlug(value: string) {
+  const words = value.replace(/-/g, " ").trim();
 
-  if (!words || words === "minted card") {
-    return "Custom Pokemon";
-  }
+  if (!words) return "";
 
   return words.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function cardDetailsFromPathname(pathname: string) {
+  const filename = pathname.split("/").pop() ?? "minted-card";
+  const slug = filename.replace(/-\d+\.png$/i, "").replace(/\.png$/i, "");
+  const [pokemonSlug, illustratorSlug = ""] = slug.split("--by-");
+  const pokemonName = titleCaseSlug(pokemonSlug);
+  const illustratorName = titleCaseSlug(illustratorSlug);
+
+  return {
+    illustratorName: illustratorName || "Unknown illustrator",
+    pokemonName:
+      pokemonName && pokemonName.toLowerCase() !== "minted card"
+        ? pokemonName
+        : "Custom Pokemon",
+  };
 }
 
 function sortNewestFirst(cards: MintedCard[]) {
@@ -129,10 +143,13 @@ async function listLocalMintedCards(): Promise<MintedCard[]> {
           const pathname = `${prefix}${entry.name}`;
           const stats = await stat(join(directory, entry.name));
 
+          const details = cardDetailsFromPathname(pathname);
+
           return {
             downloadUrl: publicPath(pathname),
+            illustratorName: details.illustratorName,
             pathname,
-            pokemonName: pokemonNameFromPathname(pathname),
+            pokemonName: details.pokemonName,
             renderUrl: publicPath(pathname),
             source: "local" as const,
             uploadedAt: stats.mtime.toISOString(),
@@ -163,20 +180,26 @@ export async function listMintedCards(): Promise<MintedCard[]> {
   } as Parameters<typeof list>[0]);
 
   return sortNewestFirst(
-    result.blobs.map((blob) => ({
-      downloadUrl: blob.downloadUrl,
-      pathname: blob.pathname,
-      pokemonName: pokemonNameFromPathname(blob.pathname),
-      renderUrl: renderPath(blob.url),
-      source: "blob" as const,
-      uploadedAt: blob.uploadedAt.toISOString(),
-      url: blob.url,
-    })),
+    result.blobs.map((blob) => {
+      const details = cardDetailsFromPathname(blob.pathname);
+
+      return {
+        downloadUrl: blob.downloadUrl,
+        illustratorName: details.illustratorName,
+        pathname: blob.pathname,
+        pokemonName: details.pokemonName,
+        renderUrl: renderPath(blob.url),
+        source: "blob" as const,
+        uploadedAt: blob.uploadedAt.toISOString(),
+        url: blob.url,
+      };
+    }),
   );
 }
 
 export async function saveMintedCard({
   base64,
+  illustratorName,
   pokemonName,
 }: SaveMintedCardOptions): Promise<MintedCard> {
   const storageError = getMintedCardStorageError();
@@ -185,7 +208,10 @@ export async function saveMintedCard({
     throw new Error(storageError);
   }
 
-  const filename = `${slugify(pokemonName) || "minted-card"}-${Date.now()}.png`;
+  const illustratorSlug = slugify(illustratorName);
+  const filename = `${slugify(pokemonName) || "minted-card"}${
+    illustratorSlug ? `--by-${illustratorSlug}` : ""
+  }-${Date.now()}.png`;
   const pathname = `${mintedCardPrefix()}${filename}`;
   const bytes = Buffer.from(base64, "base64");
 
@@ -197,8 +223,9 @@ export async function saveMintedCard({
 
     return {
       downloadUrl: publicPath(pathname),
+      illustratorName: illustratorName || "Unknown illustrator",
       pathname,
-      pokemonName: pokemonNameFromPathname(pathname),
+      pokemonName,
       renderUrl: publicPath(pathname),
       source: "local",
       uploadedAt: new Date().toISOString(),
@@ -216,8 +243,9 @@ export async function saveMintedCard({
 
   return {
     downloadUrl: blob.downloadUrl,
+    illustratorName: illustratorName || "Unknown illustrator",
     pathname: blob.pathname,
-    pokemonName: pokemonNameFromPathname(blob.pathname),
+    pokemonName,
     renderUrl: renderPath(blob.url),
     source: "blob",
     uploadedAt: new Date().toISOString(),

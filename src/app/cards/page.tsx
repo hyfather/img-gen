@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import { headers } from "next/headers";
+import { Award, Sparkles, Trophy } from "lucide-react";
+import { CardVoteControls } from "@/components/card-vote-controls";
+import { getCardVoteSummaries, voterIdFromHeaders } from "@/lib/card-votes";
 import { listMintedCards } from "@/lib/minted-cards";
 
 export const dynamic = "force-dynamic";
@@ -13,8 +16,22 @@ function formatDate(value: string) {
 
 export default async function CardsGalleryPage() {
   const cards = await listMintedCards();
-  const heroCard = cards[0];
-  const galleryCards = heroCard ? cards.slice(1) : cards;
+  const requestHeaders = await headers();
+  const voteSummaries = await getCardVoteSummaries(
+    cards.map((card) => card.pathname),
+    voterIdFromHeaders(requestHeaders),
+  );
+  const rankedCards = [...cards].sort((left, right) => {
+    const scoreDelta =
+      (voteSummaries[right.pathname]?.score ?? 0) -
+      (voteSummaries[left.pathname]?.score ?? 0);
+
+    if (scoreDelta !== 0) return scoreDelta;
+
+    return new Date(right.uploadedAt).getTime() - new Date(left.uploadedAt).getTime();
+  });
+  const heroCard = rankedCards[0];
+  const galleryCards = heroCard ? rankedCards.slice(1) : rankedCards;
 
   return (
     <main
@@ -29,11 +46,11 @@ export default async function CardsGalleryPage() {
               Minted collection
             </p>
             <h1 className="text-3xl font-black tracking-tight sm:text-5xl">
-              Realistic Pokemon card gallery
+              Realistic Pokémon card gallery
             </h1>
             <p className="mt-3 text-sm font-bold leading-6 text-slate-600 sm:text-base">
-              Every minted card is saved to the shared card vault so finished
-              realistic renders can be browsed, downloaded, and celebrated.
+              Browse the community vault, discover each illustrator, and vote
+              the best realistic renders to the top of the collection.
             </p>
           </div>
           <Link
@@ -55,15 +72,22 @@ export default async function CardsGalleryPage() {
               />
             </div>
             <div className="flex flex-col justify-center gap-4 p-2 md:p-6">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-lime-300">
-                Latest mint
+              <p className="inline-flex w-fit items-center gap-2 rounded-full bg-lime-300 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-slate-950">
+                <Trophy aria-hidden="true" size={14} />
+                Top card
               </p>
               <h2 className="text-4xl font-black leading-none tracking-tight sm:text-6xl">
                 {heroCard.pokemonName}
               </h2>
               <p className="text-sm font-bold text-slate-300">
-                Minted {formatDate(heroCard.uploadedAt)} · Stored on {heroCard.source === "blob" ? "Vercel Blob" : "local storage"}
+                Minted {formatDate(heroCard.uploadedAt)} · Illus. {heroCard.illustratorName} · Stored on {heroCard.source === "blob" ? "Vercel Blob" : "local storage"}
               </p>
+              <div className="max-w-sm rounded-2xl bg-white/10 p-3">
+                <CardVoteControls
+                  cardId={heroCard.pathname}
+                  initialSummary={voteSummaries[heroCard.pathname] ?? { downvotes: 0, score: 0, upvotes: 0, userVote: null }}
+                />
+              </div>
               <div className="flex flex-wrap gap-3 pt-2">
                 <a
                   className="rounded-full bg-lime-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-lime-200"
@@ -118,11 +142,21 @@ export default async function CardsGalleryPage() {
                     />
                   </div>
                 </a>
-                <div className="grid gap-2 p-3">
-                  <h3 className="truncate text-lg font-black">{card.pokemonName}</h3>
-                  <p className="text-xs font-bold text-slate-500">
-                    {formatDate(card.uploadedAt)} · {card.source === "blob" ? "Blob" : "Local"}
-                  </p>
+                <div className="grid gap-3 p-3">
+                  <div>
+                    <h3 className="truncate text-lg font-black">{card.pokemonName}</h3>
+                    <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black uppercase text-amber-700">
+                      <Award aria-hidden="true" size={12} />
+                      Illus. {card.illustratorName}
+                    </p>
+                    <p className="mt-2 text-xs font-bold text-slate-500">
+                      {formatDate(card.uploadedAt)} · {card.source === "blob" ? "Blob" : "Local"}
+                    </p>
+                  </div>
+                  <CardVoteControls
+                    cardId={card.pathname}
+                    initialSummary={voteSummaries[card.pathname] ?? { downvotes: 0, score: 0, upvotes: 0, userVote: null }}
+                  />
                   <a
                     className="mt-1 rounded-full bg-slate-100 px-3 py-2 text-center text-xs font-black text-slate-700 transition hover:bg-slate-950 hover:text-white"
                     href={card.downloadUrl}
