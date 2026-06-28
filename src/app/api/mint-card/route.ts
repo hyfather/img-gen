@@ -169,6 +169,7 @@ export async function POST(request: Request) {
 
     const card = await saveMintedCard({
       base64,
+      illustratorName: textValue(body.illustratorName, "Unknown illustrator"),
       pokemonName: textValue(body.pokemonName, "minted-card"),
     });
 
