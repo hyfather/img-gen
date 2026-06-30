@@ -96,7 +96,7 @@ function promptForRealisticCard(body: MintCardRequest) {
   return `Role: You are a master Pokemon Trading Card Game illustrator and print designer. Turn the provided image into a single, authentic, modern Pokemon TCG card — one that looks like a real card freshly pulled from a booster pack, convincing enough to be mistaken for an official print, never a cartoonish or obviously fake mock-up.
 
 THE ARTWORK
-The provided image is a child's hand-colored Pokemon line drawing on a white background. Merge the colors that the child has chosen with the real pokemon, almost like a gradient. So if you're provided a blue picachu sketch, the minted card should feature an ultra realistic pikachu with a blue hue. 
+The provided image is a child's hand-colored Pokemon line drawing on a white background. Merge the colors that the child has chosen with the real pokemon, almost like a gradient. So if you're provided a blue picachu sketch, the minted card should feature an ultra realistic pikachu with a blue hue. The artwork that you display on the card that you generate should resemble a real life pokemon card. The generated card should not look like a child's artwork.
 
 CARD LAYOUT — place every element where a real Pokemon card puts it, and render all text as crisp, sharp, correctly-spelled professional print:
 - Top row: the stage label "${cardStage}" small in the upper-left${evolvesFrom ? `, with a tiny "Evolves from ${evolvesFrom}" line beneath it` : ""}; the name "${fullName}" in the large bold name typeface across the top; and in the upper-right the HP printed as "${exactHp}" immediately followed by the ${cardType}-type energy symbol.
