@@ -1,5 +1,28 @@
 import type { Metadata, Viewport } from "next";
+import { Hanken_Grotesk, Newsreader, Space_Mono } from "next/font/google";
 import "./globals.css";
+
+const hanken = Hanken_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-hanken",
+  display: "swap",
+});
+
+const newsreader = Newsreader({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-newsreader",
+  display: "swap",
+});
+
+const spaceMono = Space_Mono({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-space-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Canvas Camp",
@@ -10,7 +33,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f4f7fb",
+  themeColor: "#FBF9F5",
 };
 
 export default function RootLayout({
@@ -19,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className={`h-full antialiased ${hanken.variable} ${newsreader.variable} ${spaceMono.variable}`}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
