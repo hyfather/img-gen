@@ -77,10 +77,13 @@ export default async function CardsGalleryPage() {
                 Top card
               </p>
               <h2 className="text-4xl font-black leading-none tracking-tight sm:text-6xl">
-                {heroCard.pokemonName}
+                {heroCard.pokemonName}{" "}
+                <span className="text-3xl font-normal text-slate-400 sm:text-5xl">
+                  by {heroCard.illustratorName}
+                </span>
               </h2>
               <p className="text-sm font-bold text-slate-300">
-                Minted {formatDate(heroCard.uploadedAt)} · Illus. {heroCard.illustratorName} · Stored on {heroCard.source === "blob" ? "Vercel Blob" : "local storage"}
+                Minted {formatDate(heroCard.uploadedAt)}
               </p>
               <div className="max-w-sm rounded-2xl bg-white/10 p-3">
                 <CardVoteControls
@@ -150,7 +153,7 @@ export default async function CardsGalleryPage() {
                       Illus. {card.illustratorName}
                     </p>
                     <p className="mt-2 text-xs font-bold text-slate-500">
-                      {formatDate(card.uploadedAt)} · {card.source === "blob" ? "Blob" : "Local"}
+                      {formatDate(card.uploadedAt)}
                     </p>
                   </div>
                   <CardVoteControls
