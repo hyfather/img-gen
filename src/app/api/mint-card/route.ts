@@ -55,41 +55,70 @@ function textValue(value: unknown, fallback = "") {
 
 function promptForRealisticCard(body: MintCardRequest) {
   const pokemonName = textValue(body.pokemonName, "the colored Pokemon");
-  const cardType = textValue(body.cardType, "Pokemon");
-  const cardStage = textValue(body.cardStage, "custom");
-  const cardHp = typeof body.cardHp === "number" ? body.cardHp : textValue(body.cardHp, "custom");
-  const evolvesFrom = textValue(body.evolvesFrom, pokemonName);
+  const cardType = textValue(body.cardType, "Normal");
+  const cardStage = textValue(body.cardStage, "Basic");
+  const cardHp = typeof body.cardHp === "number" ? body.cardHp : textValue(body.cardHp, "60");
+  const isExCard = Boolean(body.isExCard);
   const cardRarity = textValue(body.cardRarity, "Common");
   const cardRaritySymbol = textValue(body.cardRaritySymbol, "●");
-  const illustratorName = textValue(body.illustratorName);
+  const cardNumber = textValue(body.cardNumber, "as shown");
+  const illustratorName = textValue(body.illustratorName, "Unknown");
   const cardBorderColor = textValue(body.cardBorderColor);
+  const weakness = textValue(body.weakness, "as shown");
+  const resistance = textValue(body.resistance);
+  const retreatCost = textValue(body.retreatCost, "as shown");
+
+  // A Basic Pokemon has no "evolves from" line; neither does a card whose
+  // evolves-from just echoes its own name. Only surface it when it adds info.
+  const isBasic = /basic/i.test(cardStage);
+  const evolvesFromRaw = textValue(body.evolvesFrom);
+  const evolvesFrom =
+    !isBasic && evolvesFromRaw && evolvesFromRaw.toLowerCase() !== pokemonName.toLowerCase()
+      ? evolvesFromRaw
+      : "";
+
   const attacks = Array.isArray(body.attacks) ? (body.attacks as CardAttack[]) : [];
-  const attackText = attacks
-    .map((attack) => `${textValue(attack.name, "Attack")} ${textValue(attack.damage)}`.trim())
-    .filter(Boolean)
-    .join("; ");
+  const attackLines = attacks
+    .map((attack) => {
+      const name = textValue(attack.name);
+      if (!name) return "";
+      const damage = textValue(attack.damage);
+      return damage ? `"${name}" (damage ${damage})` : `"${name}"`;
+    })
+    .filter(Boolean);
+  const attackText = attackLines.length ? attackLines.join(", and ") : "the attack(s) shown";
 
-  const exactHpText = `${cardHp} HP`;
+  // The three strings that must survive verbatim onto the printed card.
+  const fullName = `${pokemonName}${isExCard ? " ex" : ""}`;
+  const exactHp = `${cardHp} HP`;
+  const illustratorCredit = `Illus. ${illustratorName}`;
 
-  return `The provided image is a child's hand-colored Pokemon line art on a white background. Create a realistic premium collectible Pokemon-style trading card featuring this exact colored artwork. The Pokemon's appearance in the output MUST be pixel-for-pixel faithful to the colors in the provided image — this is a kid's custom coloring and every color choice is intentional.
+  return `Role: You are a master Pokemon Trading Card Game illustrator and print designer. Turn the provided image into a single, authentic, modern Pokemon TCG card — one that looks like a real card freshly pulled from a booster pack, convincing enough to be mistaken for an official print, never a cartoonish or obviously fake mock-up.
 
-Card specifications — render these exactly as text on the card, do not hallucinate or substitute: Pokemon name ${pokemonName}${body.isExCard ? " ex" : ""}, ${cardStage}, HP "${exactHpText}", ${cardType} type, evolves from ${evolvesFrom}, attacks ${attackText || "as shown"}, weakness ${textValue(body.weakness, "as shown")}, resistance ${textValue(body.resistance, "as shown")}, retreat ${textValue(body.retreatCost, "as shown")}, card number ${textValue(body.cardNumber, "as shown")}, rarity ${cardRarity} with symbol ${cardRaritySymbol}, illustrator "Illus. ${illustratorName}".
+THE ARTWORK
+The provided image is a child's hand-colored Pokemon line drawing on a white background. Use that exact creature as the card's hero illustration inside the art window. The child's colors are the absolute source of truth: reproduce them faithfully and do NOT recolor, repaint, or "correct" the Pokemon toward its official or canonical palette — if the kid colored it blue it stays blue, purple stays purple, and so on. You may place the character into a fitting illustrated background scene and add a tasteful holo/foil shimmer over the art, but every color on the creature itself must trace back to the provided image.
 
-Critical HP requirement: the final rendered card MUST show exactly "${exactHpText}" in the HP area. Copy those digits character-for-character. Do not round, cap, abbreviate, omit, restyle into a different number, or substitute any other HP value. If the HP is visually awkward because it is long, preserve the exact text anyway and fit it into the HP area.
+CARD LAYOUT — place every element where a real Pokemon card puts it, and render all text as crisp, sharp, correctly-spelled professional print:
+- Top row: the stage label "${cardStage}" small in the upper-left${evolvesFrom ? `, with a tiny "Evolves from ${evolvesFrom}" line beneath it` : ""}; the name "${fullName}" in the large bold name typeface across the top; and in the upper-right the HP printed as "${exactHp}" immediately followed by the ${cardType}-type energy symbol.
+- Center: a framed illustration window holding the child's colored Pokemon as the main art.
+- Just below the art: a thin flavor strip (Pokemon category plus a height/weight style line).
+- Attacks: ${attackText}. Lay each attack out like a real card — ${cardType}-type energy-cost symbols on the left, the attack name in the middle, the damage number right-aligned, and a short rules sentence beneath the name.
+- Bottom stats row: "Weakness" with a type symbol and "${weakness}"; "Resistance" ${resistance ? `with a type symbol and "${resistance}"` : "(leave the value blank)"}; and "Retreat Cost" shown as a row of colorless energy symbols matching "${retreatCost}".
+- Very bottom edge: the illustrator credit "${illustratorCredit}" in the lower-left corner, and the collector number ${cardNumber} with the rarity symbol ${cardRaritySymbol} in the lower-right corner.
+Rarity is ${cardRarity}; reflect it in the finish — commons stay matte/plain while rarer cards earn a stronger holo/foil treatment on the frame and art window.
+${isExCard ? `This is an "ex" card: use the modern ex card frame with its silver/two-tone styling, and set the "ex" in its signature lowercase italic lettering right after the name.\n` : ""}${cardBorderColor ? `Outer card border/frame color: ${cardBorderColor}.\n` : ""}
+EXACT TEXT — copy these strings character-for-character; never translate, round, cap, abbreviate, restyle, or invent values:
+- HP must read exactly "${exactHp}". If the number is unusually large, keep every digit and shrink the text to fit the HP area rather than rounding or truncating it.
+- Illustrator credit must read exactly "${illustratorCredit}", clearly legible as normal small print (not hidden microtext).
+- Name must read exactly "${fullName}".
+Add no other text: no extra attacks, invented stats, stray numbers, flavor or copyright lines, set logos, or watermarks beyond what is listed above. If you are unsure what belongs somewhere, leave it blank rather than guessing.
 
-Output dimensions (hard requirement): the output image MUST be exactly ${CARD_RENDER_WIDTH} pixels wide by ${CARD_RENDER_HEIGHT} pixels tall — a single ${CARD_ASPECT_RATIO} trading-card frame. Do not change, crop, pad, or letterbox these proportions.
+REALISM: match a genuine printed card — official-style typography with proper kerning and alignment, glossy laminated cardstock with fine print texture, clean sharp ink, and a tasteful foil/holo sheen on the frame and rarity area. Keep the lighting flat and even, as on a scanned card.
 
-Single-card requirement (most important): render EXACTLY ONE card that fills the entire ${CARD_RENDER_WIDTH}x${CARD_RENDER_HEIGHT} frame. Never output two or more cards, a side-by-side pair, a normal-versus-holographic or before/after comparison, mirrored or duplicate copies, a grid, a sheet, a contact sheet, multiple variants, or any second card or partial card anywhere in the image. There is one card and one card only.
-
-Framing requirement (most important for layout): output ONLY the card front, and make the single card fill the entire image edge to edge. The rendered card must occupy 100% of the frame with no surrounding scene whatsoever — no table, desk, hand, holder, sleeve, mat, easel, or background surface; no drop shadow, no photo border, no rounded photo frame, and no empty margins, gaps, or whitespace around or beside the card. Render it as a flat, perfectly head-on scan of the card front in portrait orientation. The card's own printed edge IS the outer edge of the image, with no visible card thickness or 3D perspective. Do not depict the card sitting on or photographed against anything.
-
-COLOR CONSTRAINTS — THIS IS THE MOST IMPORTANT RULE: The provided image is the ABSOLUTE source of truth for the Pokemon's colors. IGNORE any prior knowledge of what this Pokemon "should" look like. If the Pokemon is colored blue, keep it blue. If it is purple, green, pink, or any other color, preserve it exactly. DO NOT "correct" or "improve" the Pokemon's colors to match official artwork, species standards, or canonical appearances. The kid's coloring is the design. You may add gloss and foil shimmer on the card surface, but do not recolor the Pokemon, swap the palette, or introduce unrelated dominant colors. Every color pixel on the Pokemon body in the output must trace back to a corresponding color in the user's provided image.${cardBorderColor ? ` The outer card frame/border must match the supplied color ${cardBorderColor}.` : ""}
-
-Art direction: make this exciting and easy for a 7-year-old to love at a glance: big heroic character art, bold readable HP, bright playful energy, shiny collectible details, and a clear illustrator credit. Keep a premium printed finish applied to the card surface itself — glossy laminated stock, fine print texture, crisp ink, and a subtle foil/holo sheen on the frame and rarity. Do not add environmental lighting, studio reflections, or scene shadows around the card.
-
-The two most important readable details are the HP and illustrator credit. The illustrator credit must be clearly readable on the lower portion of the card as "Illus. ${illustratorName}", not hidden in microtext. The rarity symbol ${cardRaritySymbol} must appear near the collector number.
-
-Text constraints: do not add any extra labels, fake rules, fake copyright lines, random numbers, decorative glyph words, logos, or watermark text. If any text is unclear, keep the supplied card text above rather than inventing replacements. The exact HP text "${exactHpText}" is the highest-priority text requirement. The result should be a single high-resolution realistic card front that fills the ${CARD_RENDER_WIDTH}x${CARD_RENDER_HEIGHT} frame, not a blank template, not a photo of a card in a scene, and never two cards or a side-by-side pair.`;
+OUTPUT FORMAT:
+- Exactly ONE card. Never two cards, a side-by-side pair, a grid, a sheet, a before/after, a normal-versus-holo comparison, mirrored or duplicate copies, or any partial second card anywhere in the frame.
+- The single card fills the whole frame edge-to-edge: a flat, perfectly head-on scan of the card FRONT in portrait orientation, exactly ${CARD_RENDER_WIDTH}x${CARD_RENDER_HEIGHT} pixels (${CARD_ASPECT_RATIO}). The card's own printed edge is the edge of the image.
+- No surrounding scene, table, desk, hand, sleeve, holder, mat, drop shadow, photo border, margins, or whitespace around the card, and no visible card thickness or 3D perspective.`;
 }
 
 async function readOpenRouterJson(response: Response) {
