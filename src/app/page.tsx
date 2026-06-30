@@ -1,8 +1,5 @@
-import { CanvasEditor } from "@/components/canvas-editor";
-import { getCanvasBackgrounds } from "@/lib/backgrounds";
+import { CanvasCamp } from "@/components/canvas-camp";
 
-export default async function Home() {
-  const backgrounds = await getCanvasBackgrounds();
-
-  return <CanvasEditor backgrounds={backgrounds} />;
+export default function Home() {
+  return <CanvasCamp />;
 }
