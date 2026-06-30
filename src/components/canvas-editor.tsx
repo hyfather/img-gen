@@ -1515,7 +1515,31 @@ export function CanvasEditor({ backgrounds }: CanvasEditorProps) {
     setStatus("Minting realistic Pokemon card");
 
     try {
-      const finalCardImage = composeColoredPokemon(true);
+      // Live canvases are only mounted while on the Color step. When minting from
+      // a later step they're null, so fall back to the saved composite or cardImageUrl
+      // and re-draw it onto a white-background canvas.
+      let finalCardImage = composeColoredPokemon(true);
+
+      if (!finalCardImage) {
+        const source =
+          (composedColoredRef.current?.url === imageUrl
+            ? composedColoredRef.current.composite
+            : "") || cardImageUrl;
+
+        if (source) {
+          const canvas = document.createElement("canvas");
+          canvas.width = CANVAS_SIZE;
+          canvas.height = CANVAS_SIZE;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            const img = await loadImage(source);
+            ctx.drawImage(img, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            finalCardImage = canvas.toDataURL("image/png");
+          }
+        }
+      }
 
       if (!finalCardImage) {
         throw new Error("Color your Pokemon before minting.");
